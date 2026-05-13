@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Second Brain"/>
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
+  <title>Second Brain</title>
+
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3525cd',
+            'primary-light': '#4f46e5',
+            'primary-faint': '#e2dfff',
+            'primary-dim': '#c3c0ff',
+            mint: '#006c49',
+            'mint-light': '#6cf8bb',
+            'mint-faint': '#e8fdf4',
+            amber: '#684000',
+            'amber-light': '#ffddb8',
+            surface: '#f8f9ff',
+            card: '#ffffff',
+            'card-alt': '#eff4ff',
+            'border-soft': '#e5eeff',
+            'text-main': '#0b1c30',
+            'text-muted': '#464555',
+            'text-faint': '#777587',
+            danger: '#ba1a1a',
+          },
+          fontFamily: {
+            sans:    ['Inter',  'sans-serif'],
+            display: ['Geist',  'sans-serif'],
+          },
+          borderRadius: {
+            DEFAULT: '0.5rem',
+            lg: '0.75rem',
+            xl: '1rem',
+            '2xl': '1.25rem',
+            '3xl': '1.5rem',
+            full: '9999px',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      user-select: none; display: inline-block; vertical-align: middle;
+    }
+    .icon-fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    body { font-family: 'Inter', sans-serif; background: #f8f9ff; color: #0b1c30; }
+    .font-display, h1, h2, h3, h4 { font-family: 'Geist', sans-serif; }
+
+    /* Safe area */
+    #bottom-nav { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+    #main        { padding-bottom: calc(70px + max(10px, env(safe-area-inset-bottom))); }
+    @media (min-width: 1024px) { #main { padding-bottom: 32px; } }
+    header { padding-top: max(12px, env(safe-area-inset-top, 12px)); }
+
+    /* Views */
+    .view       { display: none; }
+    .view.active { display: block; animation: fadeUp .22s ease-out; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+    /* Smooth ring animation */
+    .ring-arc { transition: stroke-dashoffset .65s cubic-bezier(.4,0,.2,1); }
+
+    /* Gloss on progress bars */
+    .bar-gloss { position:relative; overflow:hidden; }
+    .bar-gloss::after {
+      content:''; position:absolute; inset:0 0 50% 0;
+      background: rgba(255,255,255,.22); border-radius:inherit; pointer-events:none;
+    }
+
+    /* Card hover on desktop */
+    @media (hover: hover) {
+      .task-row:hover { background: #eff4ff; }
+    }
+
+    /* Checkbox bounce */
+    @keyframes checkPop { 0%{transform:scale(.5);opacity:0} 65%{transform:scale(1.2)} 100%{transform:scale(1);opacity:1} }
+    .check-pop { animation: checkPop .25s ease-out forwards; }
+
+    /* Completion strikethrough fade */
+    .done-row { opacity:.55; }
+    .done-row .task-title { text-decoration: line-through; }
+
+    /* Toast */
+    #toast { transition: opacity .25s ease, transform .25s ease; }
+    #toast.show { opacity:1 !important; transform:translate(-50%,0) !important; pointer-events:auto !important; }
+
+    /* Scrollbar minimal */
+    ::-webkit-scrollbar { width:3px; }
+    ::-webkit-scrollbar-thumb { background:#c7c4d8; border-radius:2px; }
+
+    /* Prevent iOS bounce */
+    html, body { overscroll-behavior: none; }
+    #main { -webkit-overflow-scrolling: touch; }
+
+    /* Modal bg */
+    .modal-bg { background:rgba(11,28,48,.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+
+    /* XP bar shimmer */
+    .xp-fill { background: linear-gradient(90deg, #3525cd 0%, #4f46e5 60%, #6cf8bb 100%); background-size:200% 100%; }
+
+    /* Tab pill active */
+    .tab.active { background:#3525cd; color:#fff; }
+    .tab { transition: background .18s ease, color .18s ease; }
+
+    /* Habit border colors via inline vars */
+    .habit-border-primary { border-left-color: #3525cd; }
+    .habit-border-mint    { border-left-color: #006c49; }
+    .habit-border-amber   { border-left-color: #684000; }
+
+    input, select, textarea { -webkit-appearance:none; appearance:none; }
+    input:focus, select:focus { outline:2px solid #3525cd; outline-offset:1px; }
+
+    /* Completed section header */
+    .section-header { font-family:'Geist',sans-serif; font-weight:600; font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; color:#777587; margin:16px 0 8px; }
+
+    /* Swipe hint subtle line */
+    .pill-handle { width:36px; height:4px; background:#dce9ff; border-radius:99px; margin:0 auto 16px; }
+  </style>
+</head>
+<body class="min-h-screen bg-surface">
+
+<!-- ══════════════════════════════════════
+     HEADER — XP bar + title
+══════════════════════════════════════ -->
+<header class="sticky top-0 z-40 bg-card/95 backdrop-blur-md border-b border-border-soft">
+  <div class="max-w-2xl mx-auto lg:max-w-5xl px-4 pt-3 pb-0">
+    <!-- Top row -->
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2.5">
+        <span class="text-xl">⚡</span>
+        <div>
+          <div class="font-display font-bold text-base text-primary leading-none" id="hdr-title">Second Brain</div>
+          <div class="text-[11px] text-text-muted mt-0.5" id="hdr-level">Level 24 · Navigator</div>
+        </div>
+      </div>
+      <button onclick="openAddModal()"
+        class="flex items-center gap-1.5 bg-primary text-white px-4 py-2 rounded-xl text-sm font-display font-semibold active:scale-95 transition-all shadow-sm">
+        <span class="material-symbols-outlined text-base">add</span>
+        <span>Add Task</span>
+      </button>
+    </div>
+
+    <!-- XP progress bar -->
+    <div class="h-1.5 bg-border-soft rounded-full overflow-hidden mb-3">
+      <div class="h-full xp-fill rounded-full bar-gloss transition-all duration-700" id="hdr-xp-bar" style="width:65%"></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1.5 -mb-px pb-0">
+      <button onclick="navigate('today')"   data-tab="today"   class="tab flex items-center gap-1.5 px-4 py-2 rounded-t-xl rounded-b-none text-sm font-display font-semibold text-text-muted active:scale-95">
+        <span class="material-symbols-outlined text-base">wb_sunny</span> Today
+      </button>
+      <button onclick="navigate('pending')" data-tab="pending" class="tab flex items-center gap-1.5 px-4 py-2 rounded-t-xl rounded-b-none text-sm font-display font-semibold text-text-muted active:scale-95">
+        <span class="material-symbols-outlined text-base">inbox</span> Pending
+      </button>
+      <button onclick="navigate('habits')"  data-tab="habits"  class="tab flex items-center gap-1.5 px-4 py-2 rounded-t-xl rounded-b-none text-sm font-display font-semibold text-text-muted active:scale-95">
+        <span class="material-symbols-outlined text-base">repeat</span> Habits
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════
+     MAIN — Views
+══════════════════════════════════════ -->
+<main id="main" class="overflow-y-auto">
+<div class="max-w-2xl mx-auto lg:max-w-5xl px-4 py-5">
+
+  <!-- ─── TODAY'S TASKS ─────────────────── -->
+  <div id="view-today" class="view">
+
+    <!-- Stats row -->
+    <div class="grid grid-cols-3 gap-3 mb-5">
+      <div class="bg-card rounded-2xl p-3.5 border border-border-soft text-center">
+        <div class="font-display font-bold text-2xl text-primary" id="today-done-count">0</div>
+        <div class="text-xs text-text-muted mt-0.5">Done today</div>
+      </div>
+      <div class="bg-card rounded-2xl p-3.5 border border-border-soft text-center">
+        <div class="font-display font-bold text-2xl text-text-main" id="today-left-count">0</div>
+        <div class="text-xs text-text-muted mt-0.5">Left to do</div>
+      </div>
+      <div class="bg-primary rounded-2xl p-3.5 text-center">
+        <div class="font-display font-bold text-2xl text-white" id="today-xp-count">0</div>
+        <div class="text-xs text-primary-dim mt-0.5">XP earned</div>
+      </div>
+    </div>
+
+    <!-- Task list -->
+    <div id="today-list" class="space-y-2"></div>
+
+    <!-- Empty state -->
+    <div id="today-empty" class="hidden text-center py-16">
+      <span class="material-symbols-outlined text-5xl text-text-faint block mb-3">task_alt</span>
+      <p class="font-display font-semibold text-text-muted">No tasks for today</p>
+      <p class="text-sm text-text-faint mt-1">Add a task and mark it as "Today"</p>
+      <button onclick="openAddModal(true)"
+        class="mt-5 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-display font-semibold active:scale-95 transition-all inline-flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-base">add</span> Add today's task
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── PENDING TASKS ─────────────────── -->
+  <div id="view-pending" class="view">
+
+    <!-- Search + filter row -->
+    <div class="flex gap-2.5 mb-5">
+      <div class="flex-1 bg-card rounded-xl border border-border-soft flex items-center gap-2 px-3.5 py-2.5">
+        <span class="material-symbols-outlined text-text-faint text-lg">search</span>
+        <input id="pending-search" type="text" placeholder="Search tasks…" autocomplete="off"
+          class="flex-1 bg-transparent border-none text-sm text-text-main placeholder-text-faint focus:outline-none"
+          oninput="renderPending()"/>
+      </div>
+      <select id="pending-filter" onchange="renderPending()"
+        class="bg-card border border-border-soft rounded-xl px-3 py-2.5 text-sm text-text-muted font-display focus:outline-none focus:border-primary transition-colors">
+        <option value="all">All</option>
+        <option value="Hard">Hard</option>
+        <option value="Medium">Medium</option>
+        <option value="Easy">Easy</option>
+      </select>
+    </div>
+
+    <!-- Summary pills -->
+    <div class="flex gap-2 mb-4 flex-wrap" id="pending-summary"></div>
+
+    <!-- List -->
+    <div id="pending-list" class="space-y-2"></div>
+
+    <!-- Empty -->
+    <div id="pending-empty" class="hidden text-center py-16">
+      <span class="material-symbols-outlined text-5xl text-text-faint block mb-3">inbox</span>
+      <p class="font-display font-semibold text-text-muted">Nothing pending</p>
+      <p class="text-sm text-text-faint mt-1">All caught up! Add more tasks below.</p>
+      <button onclick="openAddModal(false)"
+        class="mt-5 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-display font-semibold active:scale-95 transition-all inline-flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-base">add</span> Add pending task
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── HABITS ─────────────────────────── -->
+  <div id="view-habits" class="view space-y-5">
+
+    <!-- Streak + weekly dots -->
+    <div class="bg-card rounded-2xl border border-border-soft p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="font-display font-semibold text-base text-text-main">Weekly Streak</h3>
+          <p class="text-xs text-text-muted mt-0.5">Keep your momentum going</p>
+        </div>
+        <span class="font-display font-bold text-mint text-sm flex items-center gap-1" id="streak-badge">
+          <span class="material-symbols-outlined text-base icon-fill" style="color:#f97316">local_fire_department</span>
+          12 days
+        </span>
+      </div>
+      <div class="grid grid-cols-7 gap-1.5" id="week-dots"></div>
+    </div>
+
+    <!-- Habit cards -->
+    <div>
+      <h3 class="font-display font-semibold text-base text-text-main mb-3">Today's Habits</h3>
+      <div class="space-y-3" id="habit-cards"></div>
+    </div>
+
+    <!-- Consistency map -->
+    <div class="bg-card rounded-2xl border border-border-soft p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-display font-semibold text-base text-text-main">Consistency</h3>
+        <span class="text-xs text-text-faint">Last 90 days</span>
+      </div>
+      <div id="heatmap" style="display:grid; grid-template-columns:repeat(13,1fr); gap:3px" class="mb-3"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] text-text-faint">Less</span>
+        <div class="flex gap-1">
+          <div class="w-2.5 h-2.5 rounded-sm" style="background:#006c49;opacity:.15"></div>
+          <div class="w-2.5 h-2.5 rounded-sm" style="background:#006c49;opacity:.4"></div>
+          <div class="w-2.5 h-2.5 rounded-sm" style="background:#006c49;opacity:.7"></div>
+          <div class="w-2.5 h-2.5 rounded-sm" style="background:#006c49"></div>
+        </div>
+        <span class="text-[10px] text-text-faint">More</span>
+      </div>
+    </div>
+
+    <!-- Add habit -->
+    <button onclick="showToast('Custom habits coming soon! 🧪','science')"
+      class="w-full border-2 border-dashed border-border-soft rounded-2xl p-4 text-sm font-display font-medium text-text-muted hover:border-primary hover:text-primary transition-colors active:scale-[.99] flex items-center justify-center gap-2">
+      <span class="material-symbols-outlined text-base">add</span> Add new habit
+    </button>
+  </div>
+
+</div><!-- /inner -->
+</main>
+
+<!-- ══════════════════════════════════════
+     BOTTOM NAV (mobile only)
+══════════════════════════════════════ -->
+<nav id="bottom-nav" class="fixed bottom-0 left-0 w-full z-50 lg:hidden bg-card/95 backdrop-blur-md border-t border-border-soft flex justify-around items-center px-2 pt-2">
+  <button onclick="navigate('today')"   data-bnav="today"   class="bnav-btn flex flex-col items-center gap-0.5 px-5 py-1.5 rounded-2xl text-text-faint transition-all active:scale-90">
+    <span class="material-symbols-outlined text-[22px]">wb_sunny</span>
+    <span class="text-[10px] font-display font-semibold">Today</span>
+  </button>
+  <button onclick="navigate('pending')" data-bnav="pending" class="bnav-btn flex flex-col items-center gap-0.5 px-5 py-1.5 rounded-2xl text-text-faint transition-all active:scale-90">
+    <span class="material-symbols-outlined text-[22px]">inbox</span>
+    <span class="text-[10px] font-display font-semibold">Pending</span>
+  </button>
+  <button onclick="navigate('habits')"  data-bnav="habits"  class="bnav-btn flex flex-col items-center gap-0.5 px-5 py-1.5 rounded-2xl text-text-faint transition-all active:scale-90">
+    <span class="material-symbols-outlined text-[22px]">repeat</span>
+    <span class="text-[10px] font-display font-semibold">Habits</span>
+  </button>
+</nav>
+
+<!-- ══════════════════════════════════════
+     ADD TASK MODAL
+══════════════════════════════════════ -->
+<div id="add-modal" class="fixed inset-0 z-[100] hidden flex items-end sm:items-center justify-center"
+  onclick="if(event.target===this)closeAddModal()">
+  <div class="modal-bg absolute inset-0"></div>
+  <div class="relative bg-card rounded-t-3xl sm:rounded-3xl p-5 w-full sm:max-w-md z-10 shadow-2xl"
+    style="animation:fadeUp .22s ease-out; padding-bottom:max(20px,calc(env(safe-area-inset-bottom)+16px))">
+    <div class="pill-handle sm:hidden"></div>
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-display font-bold text-lg text-text-main">New Task</h3>
+      <button onclick="closeAddModal()" class="w-8 h-8 flex items-center justify-center rounded-xl bg-card-alt text-text-muted active:scale-90">
+        <span class="material-symbols-outlined text-base">close</span>
+      </button>
+    </div>
+
+    <div class="space-y-3.5">
+      <!-- Title -->
+      <div>
+        <label class="block text-[11px] font-display font-bold text-text-faint uppercase tracking-widest mb-1.5">What needs to be done? *</label>
+        <input id="m-title" type="text" placeholder="e.g. Review Q3 report" autocomplete="off"
+          class="w-full bg-card-alt rounded-xl px-4 py-3.5 text-sm text-text-main placeholder-text-faint border border-border-soft focus:border-primary focus:outline-none transition-colors"
+          onkeydown="if(event.key==='Enter')submitAdd()"/>
+      </div>
+
+      <!-- Difficulty + XP -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[11px] font-display font-bold text-text-faint uppercase tracking-widest mb-1.5">Difficulty</label>
+          <select id="m-diff"
+            class="w-full bg-card-alt rounded-xl px-3 py-3.5 text-sm text-text-main border border-border-soft focus:border-primary focus:outline-none transition-colors">
+            <option>Easy</option>
+            <option selected>Medium</option>
+            <option>Hard</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[11px] font-display font-bold text-text-faint uppercase tracking-widest mb-1.5">XP Reward</label>
+          <input id="m-xp" type="number" value="150" min="10" max="1000"
+            class="w-full bg-card-alt rounded-xl px-3 py-3.5 text-sm text-text-main border border-border-soft focus:border-primary focus:outline-none transition-colors"/>
+        </div>
+      </div>
+
+      <!-- Tag + Type -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[11px] font-display font-bold text-text-faint uppercase tracking-widest mb-1.5">Tag / Area</label>
+          <input id="m-tag" type="text" placeholder="Work, Health, Life…" autocomplete="off"
+            class="w-full bg-card-alt rounded-xl px-3 py-3.5 text-sm text-text-main placeholder-text-faint border border-border-soft focus:border-primary focus:outline-none transition-colors"/>
+        </div>
+        <div>
+          <label class="block text-[11px] font-display font-bold text-text-faint uppercase tracking-widest mb-1.5">Add to</label>
+          <select id="m-type"
+            class="w-full bg-card-alt rounded-xl px-3 py-3.5 text-sm text-text-main border border-border-soft focus:border-primary focus:outline-none transition-colors">
+            <option value="today">Today's Tasks</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Due date (optional) -->
+      <div>
+        <label class="block text-[11px] font-display font-bold text-text-faint uppercase tracking-widest mb-1.5">Due Date <span class="normal-case tracking-normal font-normal">(optional)</span></label>
+        <input id="m-due" type="date"
+          class="w-full bg-card-alt rounded-xl px-3 py-3.5 text-sm text-text-main border border-border-soft focus:border-primary focus:outline-none transition-colors"/>
+      </div>
+
+      <button onclick="submitAdd()"
+        class="w-full bg-primary text-white py-4 rounded-xl font-display font-bold text-sm active:scale-[.98] transition-all shadow-sm mt-1">
+        Add Task
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TOAST
+══════════════════════════════════════ -->
+<div id="toast"
+  class="fixed left-1/2 z-[200] bg-text-main text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-display font-semibold flex items-center gap-2 opacity-0 pointer-events-none whitespace-nowrap"
+  style="bottom:calc(72px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,16px)">
+  <span class="material-symbols-outlined text-mint-light text-base icon-fill" id="toast-icon">check_circle</span>
+  <span id="toast-msg">Done!</span>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCRIPT
+══════════════════════════════════════ -->
+<script>
+// ──────────────────────────────────────
+// DEFAULT DATA
+// ──────────────────────────────────────
+const SEED = {
+  profile: { level:24, xp:3250, xpToNext:5000, streak:12, title:'Navigator' },
+  nextId: 15,
+  currentView: 'today',
+  tasks: [
+    // Today's tasks
+    { id:1,  title:'Morning deep work session',          diff:'Hard',   xp:450, tag:'Focus',    today:true,  done:false, dueDate:'' },
+    { id:2,  title:'Clear inbox',                        diff:'Easy',   xp:100, tag:'Admin',    today:true,  done:true,  dueDate:'' },
+    { id:3,  title:'Review daily progress',              diff:'Easy',   xp:100, tag:'Review',   today:true,  done:true,  dueDate:'' },
+    { id:4,  title:'30-minute workout',                  diff:'Medium', xp:250, tag:'Health',   today:true,  done:false, dueDate:'' },
+    { id:5,  title:'Weekly planning',                    diff:'Medium', xp:200, tag:'Planning', today:true,  done:false, dueDate:'' },
+    // Pending tasks
+    { id:6,  title:'Refactor core architecture — Project Zenith', diff:'Hard', xp:500, tag:'Engineering', today:false, done:false, dueDate:'2024-10-24' },
+    { id:7,  title:'Write annual sustainability report', diff:'Hard',   xp:450, tag:'Compliance', today:false, done:false, dueDate:'2024-10-15' },
+    { id:8,  title:'UI overhaul team sync prep',         diff:'Medium', xp:250, tag:'Design',   today:false, done:false, dueDate:'' },
+    { id:9,  title:'Update API documentation',           diff:'Medium', xp:200, tag:'Docs',     today:false, done:false, dueDate:'' },
+    { id:10, title:'Research Zettelkasten method',       diff:'Medium', xp:150, tag:'Learning', today:false, done:false, dueDate:'' },
+    { id:11, title:'Organise project folders',           diff:'Easy',   xp:80,  tag:'Admin',    today:false, done:false, dueDate:'' },
+    { id:12, title:'Buy office supplies',                diff:'Easy',   xp:50,  tag:'Office',   today:false, done:false, dueDate:'' },
+    { id:13, title:'Confirm travel itinerary',           diff:'Easy',   xp:30,  tag:'Life',     today:false, done:false, dueDate:'' },
+    { id:14, title:'Weekly review session',              diff:'Hard',   xp:500, tag:'Review',   today:false, done:false, dueDate:'' },
+  ],
+  habits: [
+    { id:1, name:'Hydration',  icon:'water_drop',      color:'#3525cd', target:8,  current:6,  xp:25, done:false, unit:'glasses' },
+    { id:2, name:'Reading',    icon:'menu_book',        color:'#684000', target:45, current:10, xp:50, done:false, unit:'mins'   },
+    { id:3, name:'Meditation', icon:'self_improvement', color:'#006c49', target:20, current:20, xp:30, done:true,  unit:'mins'   },
+  ],
+};
+
+// ──────────────────────────────────────
+// STATE
+// ──────────────────────────────────────
+function loadState() {
+  try {
+    const s = localStorage.getItem('sb_v3');
+    if (s) return { ...JSON.parse(JSON.stringify(SEED)), ...JSON.parse(s) };
+  } catch(_) {}
+  return JSON.parse(JSON.stringify(SEED));
+}
+function save() { try { localStorage.setItem('sb_v3', JSON.stringify(st)); } catch(_) {} }
+let st = loadState();
+
+// ──────────────────────────────────────
+// NAVIGATION
+// ──────────────────────────────────────
+function navigate(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  st.currentView = view;
+
+  // Tabs in header
+  document.querySelectorAll('[data-tab]').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === view));
+
+  // Bottom nav
+  document.querySelectorAll('.bnav-btn').forEach(b => {
+    const on = b.dataset.bnav === view;
+    b.className = `bnav-btn flex flex-col items-center gap-0.5 px-5 py-1.5 rounded-2xl transition-all active:scale-90 ${
+      on ? 'bg-primary-faint text-primary' : 'text-text-faint'
+    }`;
+  });
+
+  if (view === 'today')   renderToday();
+  if (view === 'pending') renderPending();
+  if (view === 'habits')  renderHabits();
+
+  document.getElementById('main').scrollTop = 0;
+}
+
+// ──────────────────────────────────────
+// XP + LEVEL
+// ──────────────────────────────────────
+const TITLES = ['Beginner','Explorer','Doer','Achiever','Navigator','Architect','Master','Grandmaster','Oracle','Legend'];
+function titleFor(lvl) { return TITLES[Math.min(Math.floor((lvl-1)/5), TITLES.length-1)]; }
+
+function addXP(amount) {
+  st.profile.xp += amount;
+  while (st.profile.xp >= st.profile.xpToNext) {
+    st.profile.xp -= st.profile.xpToNext;
+    st.profile.level++;
+    st.profile.xpToNext = Math.round(st.profile.xpToNext * 1.28);
+    st.profile.title = titleFor(st.profile.level);
+    setTimeout(() => showToast(`🎉 Level ${st.profile.level}! You're now a ${st.profile.title}.`, 'stars'), 400);
+  }
+  save();
+  refreshHeader();
+}
+
+function refreshHeader() {
+  const { level, xp, xpToNext, title } = st.profile;
+  const pct = Math.round((xp / xpToNext) * 100);
+  document.getElementById('hdr-title').textContent = 'Second Brain';
+  document.getElementById('hdr-level').textContent = `Level ${level} · ${title} · ${xp.toLocaleString()} XP`;
+  document.getElementById('hdr-xp-bar').style.width = pct + '%';
+}
+
+// ──────────────────────────────────────
+// TOAST
+// ──────────────────────────────────────
+let _tt;
+function showToast(msg, icon = 'check_circle') {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  document.getElementById('toast-icon').textContent = icon;
+  t.classList.add('show');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ──────────────────────────────────────
+// MODAL
+// ──────────────────────────────────────
+function openAddModal(forToday) {
+  document.getElementById('add-modal').classList.remove('hidden');
+  document.getElementById('add-modal').style.display = 'flex';
+  if (forToday !== undefined)
+    document.getElementById('m-type').value = forToday ? 'today' : 'pending';
+  setTimeout(() => document.getElementById('m-title').focus(), 80);
+}
+function closeAddModal() {
+  document.getElementById('add-modal').classList.add('hidden');
+  document.getElementById('add-modal').style.display = 'none';
+  document.getElementById('m-title').value = '';
+  document.getElementById('m-diff').value  = 'Medium';
+  document.getElementById('m-xp').value    = '150';
+  document.getElementById('m-tag').value   = '';
+  document.getElementById('m-type').value  = 'today';
+  document.getElementById('m-due').value   = '';
+}
+function submitAdd() {
+  const title = document.getElementById('m-title').value.trim();
+  if (!title) {
+    document.getElementById('m-title').style.borderColor = '#ba1a1a';
+    document.getElementById('m-title').focus();
+    return;
+  }
+  document.getElementById('m-title').style.borderColor = '';
+  const task = {
+    id:       st.nextId++,
+    title,
+    diff:     document.getElementById('m-diff').value,
+    xp:       Math.max(10, parseInt(document.getElementById('m-xp').value) || 100),
+    tag:      document.getElementById('m-tag').value.trim() || 'General',
+    today:    document.getElementById('m-type').value === 'today',
+    done:     false,
+    dueDate:  document.getElementById('m-due').value || '',
+  };
+  st.tasks.push(task);
+  save();
+  closeAddModal();
+  showToast(`"${title.slice(0,30)}" added ✓`);
+  if (task.today) { if (st.currentView === 'today') renderToday(); }
+  else            { if (st.currentView === 'pending') renderPending(); }
+}
+
+// ──────────────────────────────────────
+// TASK ACTIONS
+// ──────────────────────────────────────
+function toggleDone(id) {
+  const t = st.tasks.find(x => x.id === id);
+  if (!t) return;
+  t.done = !t.done;
+  if (t.done) {
+    addXP(t.xp);
+    showToast(`+${t.xp} XP — "${t.title.slice(0,28)}${t.title.length>28?'…':''}" done ✓`);
+  }
+  save();
+  if (st.currentView === 'today')   renderToday();
+  if (st.currentView === 'pending') renderPending();
+}
+
+function deleteTask(id, e) {
+  e && e.stopPropagation();
+  st.tasks = st.tasks.filter(x => x.id !== id);
+  save();
+  showToast('Task removed.', 'delete');
+  if (st.currentView === 'today')   renderToday();
+  if (st.currentView === 'pending') renderPending();
+}
+
+function moveToPending(id, e) {
+  e && e.stopPropagation();
+  const t = st.tasks.find(x => x.id === id);
+  if (t) { t.today = false; save(); renderToday(); showToast('Moved to Pending.', 'inbox'); }
+}
+
+function moveToToday(id, e) {
+  e && e.stopPropagation();
+  const t = st.tasks.find(x => x.id === id);
+  if (t) { t.today = true; save(); renderPending(); showToast('Moved to Today!', 'wb_sunny'); }
+}
+
+// ──────────────────────────────────────
+// DIFF CONFIG
+// ──────────────────────────────────────
+const DIFF_CFG = {
+  Hard:   { dot:'bg-danger',   badge:'bg-red-50 text-danger',    label:'Hard'   },
+  Medium: { dot:'bg-amber',    badge:'bg-amber-light/30 text-amber', label:'Medium' },
+  Easy:   { dot:'bg-mint',     badge:'bg-mint-faint text-mint',  label:'Easy'   },
+};
+
+// ──────────────────────────────────────
+// RENDER: TODAY'S TASKS
+// ──────────────────────────────────────
+function renderToday() {
+  refreshHeader();
+  const tasks  = st.tasks.filter(t => t.today);
+  const done   = tasks.filter(t => t.done);
+  const undone = tasks.filter(t => !t.done);
+  const xpEarned = done.reduce((s,t) => s+t.xp, 0);
+
+  document.getElementById('today-done-count').textContent = done.length;
+  document.getElementById('today-left-count').textContent = undone.length;
+  document.getElementById('today-xp-count').textContent   = xpEarned.toLocaleString();
+
+  const empty = tasks.length === 0;
+  document.getElementById('today-empty').classList.toggle('hidden', !empty);
+  document.getElementById('today-list').innerHTML  = empty ? '' : (
+    undone.map(t => taskRow(t, 'today')).join('') +
+    (done.length ? `<p class="section-header mt-4">Done today (${done.length})</p>` + done.map(t => taskRow(t, 'today')).join('') : '')
+  );
+}
+
+// ──────────────────────────────────────
+// RENDER: PENDING TASKS
+// ──────────────────────────────────────
+function renderPending() {
+  const q  = (document.getElementById('pending-search')?.value || '').toLowerCase();
+  const df = document.getElementById('pending-filter')?.value || 'all';
+
+  let tasks = st.tasks.filter(t => !t.today);
+  if (q)        tasks = tasks.filter(t => t.title.toLowerCase().includes(q) || t.tag.toLowerCase().includes(q));
+  if (df!=='all') tasks = tasks.filter(t => t.diff === df);
+
+  // Summary pills
+  const all = st.tasks.filter(t => !t.today);
+  const counts = { Hard: all.filter(t=>t.diff==='Hard'&&!t.done).length, Medium: all.filter(t=>t.diff==='Medium'&&!t.done).length, Easy: all.filter(t=>t.diff==='Easy'&&!t.done).length };
+  document.getElementById('pending-summary').innerHTML = Object.entries(counts).filter(([,c])=>c>0).map(([d,c])=>{
+    const cfg = DIFF_CFG[d];
+    return `<span class="text-xs font-display font-semibold px-3 py-1 rounded-full ${cfg.badge}">${c} ${d}</span>`;
+  }).join('');
+
+  const undone = tasks.filter(t => !t.done);
+  const done   = tasks.filter(t => t.done);
+  const empty  = tasks.length === 0;
+
+  document.getElementById('pending-empty').classList.toggle('hidden', !empty);
+  document.getElementById('pending-list').innerHTML = empty ? '' : (
+    undone.map(t => taskRow(t, 'pending')).join('') +
+    (done.length ? `<p class="section-header mt-4">Completed (${done.length})</p>` + done.map(t => taskRow(t, 'pending')).join('') : '')
+  );
+}
+
+// ──────────────────────────────────────
+// TASK ROW HTML
+// ──────────────────────────────────────
+function taskRow(t, view) {
+  const cfg = DIFF_CFG[t.diff] || DIFF_CFG.Easy;
+
+  // Due date formatting
+  let dueHtml = '';
+  if (t.dueDate) {
+    const d = new Date(t.dueDate + 'T00:00:00');
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.ceil((d - today) / 86400000);
+    const overdue = diff < 0;
+    const urgent  = diff === 0 || diff === 1;
+    const dueStr  = overdue ? 'Overdue' : diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    dueHtml = `<span class="flex items-center gap-0.5 text-xs ${overdue||urgent ? 'text-danger font-semibold' : 'text-text-faint'}">
+      <span class="material-symbols-outlined text-xs">event</span>${dueStr}</span>`;
+  }
+
+  const actionBtn = view === 'today'
+    ? `<button onclick="moveToPending(${t.id},event)" title="Move to Pending"
+         class="w-7 h-7 flex items-center justify-center rounded-lg text-text-faint hover:bg-card-alt hover:text-text-muted active:scale-90 transition-all opacity-0 group-hover:opacity-100">
+         <span class="material-symbols-outlined text-sm">inbox</span>
+       </button>`
+    : `<button onclick="moveToToday(${t.id},event)" title="Do today"
+         class="w-7 h-7 flex items-center justify-center rounded-lg text-text-faint hover:bg-primary-faint hover:text-primary active:scale-90 transition-all opacity-0 group-hover:opacity-100">
+         <span class="material-symbols-outlined text-sm">wb_sunny</span>
+       </button>`;
+
+  return `
+    <div class="task-row ${t.done ? 'done-row' : ''} group flex items-center gap-3 bg-card rounded-2xl px-4 py-3.5 border border-border-soft transition-colors cursor-pointer"
+      onclick="toggleDone(${t.id})">
+      <!-- Checkbox -->
+      <div class="flex-shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all
+        ${t.done ? 'bg-mint border-mint' : 'border-border-soft group-hover:border-primary'}"
+        style="${t.done ? '' : ''}">
+        ${t.done ? `<span class="material-symbols-outlined text-white text-xs icon-fill check-pop">check</span>` : ''}
+      </div>
+
+      <!-- Content -->
+      <div class="flex-1 min-w-0">
+        <div class="task-title text-sm font-medium text-text-main leading-snug">${t.title}</div>
+        <div class="flex items-center gap-2 mt-1 flex-wrap">
+          <span class="inline-flex items-center gap-1 text-[10px] font-display font-semibold px-2 py-0.5 rounded-full ${cfg.badge}">
+            <span class="w-1.5 h-1.5 rounded-full ${cfg.dot} inline-block flex-shrink-0"></span>${cfg.label}
+          </span>
+          ${t.tag ? `<span class="text-[10px] text-text-faint font-display font-semibold uppercase tracking-wider">${t.tag}</span>` : ''}
+          ${dueHtml}
+        </div>
+      </div>
+
+      <!-- XP + actions -->
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span class="text-xs font-display font-bold text-primary opacity-70 ${t.done ? 'opacity-40' : ''}">+${t.xp}</span>
+        ${actionBtn}
+        <button onclick="deleteTask(${t.id},event)" title="Delete"
+          class="w-7 h-7 flex items-center justify-center rounded-lg text-text-faint hover:bg-red-50 hover:text-danger active:scale-90 transition-all opacity-0 group-hover:opacity-100">
+          <span class="material-symbols-outlined text-sm">delete</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+// ──────────────────────────────────────
+// RENDER: HABITS
+// ──────────────────────────────────────
+function renderHabits() {
+  refreshHeader();
+  document.getElementById('streak-badge').innerHTML =
+    `<span class="material-symbols-outlined text-base icon-fill" style="color:#f97316">local_fire_department</span> ${st.profile.streak} days`;
+
+  // Weekly dots
+  const days = ['M','T','W','T','F','S','S'];
+  const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+  document.getElementById('week-dots').innerHTML = days.map((d,i) => {
+    let box, lbl;
+    if (i < todayIdx) {
+      box = `<div class="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm" style="background:#6cf8bb;color:#006c49">
+               <span class="material-symbols-outlined text-base icon-fill">check</span></div>`;
+      lbl = `<span class="text-[10px] font-display font-semibold text-text-faint">${d}</span>`;
+    } else if (i === todayIdx) {
+      box = `<div class="w-9 h-9 rounded-xl border-2 border-primary flex items-center justify-center animate-pulse" style="background:#e2dfff;color:#3525cd">
+               <span class="text-xs font-bold font-display">Now</span></div>`;
+      lbl = `<span class="text-[10px] font-display font-semibold text-primary">${d}</span>`;
+    } else {
+      box = `<div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:#e5eeff;color:#c7c4d8">
+               <span class="material-symbols-outlined text-base">radio_button_unchecked</span></div>`;
+      lbl = `<span class="text-[10px] font-display font-semibold text-text-faint">${d}</span>`;
+    }
+    return `<div class="flex flex-col items-center gap-1.5">${lbl}${box}</div>`;
+  }).join('');
+
+  // Habit cards
+  document.getElementById('habit-cards').innerHTML = st.habits.map(h => {
+    const pct  = Math.min(1, h.current / h.target);
+    const circ = 126;
+    const off  = circ * (1 - pct);
+    const progressLabel = h.done
+      ? `<span class="text-xs font-display font-semibold text-mint">Done · +${h.xp} XP earned</span>`
+      : `<span class="text-xs text-text-faint">${h.current} / ${h.target} ${h.unit}</span>`;
+
+    return `
+      <div class="bg-card rounded-2xl border-l-4 border border-border-soft p-4 flex items-center gap-4 ${h.done ? 'opacity-70' : ''}"
+        style="border-left-color:${h.color}">
+        <!-- Ring -->
+        <div class="relative w-12 h-12 flex-shrink-0">
+          <svg class="w-full h-full -rotate-90" viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="20" fill="transparent" stroke="#e5eeff" stroke-width="4"/>
+            <circle cx="24" cy="24" r="20" fill="transparent" stroke="${h.color}" stroke-width="4"
+              stroke-dasharray="${circ}" stroke-dashoffset="${off}" class="ring-arc" stroke-linecap="round"/>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="material-symbols-outlined text-base ${h.done ? 'icon-fill' : ''}" style="color:${h.color}">
+              ${h.done ? 'check_circle' : h.icon}
+            </span>
+          </div>
+        </div>
+
+        <!-- Info -->
+        <div class="flex-1 min-w-0">
+          <div class="font-display font-semibold text-sm text-text-main ${h.done ? 'line-through' : ''}">${h.name}</div>
+          <div class="mt-0.5">${progressLabel}</div>
+        </div>
+
+        <!-- Action -->
+        ${h.done
+          ? `<div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style="background:#e8fdf4">
+               <span class="material-symbols-outlined text-mint icon-fill">check_circle</span>
+             </div>`
+          : `<button onclick="logHabit(${h.id})" title="Log one ${h.unit}"
+               class="w-9 h-9 rounded-full flex items-center justify-center text-primary active:scale-90 transition-all flex-shrink-0"
+               style="background:#e2dfff">
+               <span class="material-symbols-outlined">add</span>
+             </button>`
+        }
+      </div>`;
+  }).join('');
+
+  // Heatmap
+  const ops = [20,40,10,60,80,100,40,20,60,90,30,10,60,10,80,20,40,100,30,60,80,50,20,10,100,80,60,90,100,100,80,60,40,20,60,30,100,80,60,40,10,50,70,30,90,100,80,60,40,20,70,90,30,80,60,70,40,20,80,50,30,70,90,100,80,60,40,50,30,70,90,80,60,40,20,50,30,70,90,80];
+  document.getElementById('heatmap').innerHTML = ops.map(o =>
+    `<div class="aspect-square rounded-sm" style="background:#006c49;opacity:${o/100}"></div>`
+  ).join('');
+}
+
+function logHabit(id) {
+  const h = st.habits.find(x => x.id === id);
+  if (!h || h.done) return;
+  h.current = Math.min(h.target, h.current + 1);
+  if (h.current >= h.target) {
+    h.done = true;
+    addXP(h.xp);
+    showToast(`${h.name} complete! +${h.xp} XP 🔥`);
+  } else {
+    showToast(`${h.name}: ${h.current}/${h.target} ${h.unit}`, 'add_circle');
+    save();
+  }
+  renderHabits();
+}
+
+// ──────────────────────────────────────
+// KEYBOARD SHORTCUTS
+// ──────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeAddModal();
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openAddModal(); }
+});
+
+// ──────────────────────────────────────
+// BOOT
+// ──────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  navigate(st.currentView || 'today');
+});
+</script>
+</body>
+</html>
