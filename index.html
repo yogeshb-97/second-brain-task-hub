@@ -467,6 +467,17 @@ body{
         <input class="form-input" id="m-time" type="time" step="900"/>
       </div>
     </div>
+    <div class="form-group">
+      <label class="form-label">Repeat</label>
+      <select class="form-select" id="m-repeat">
+        <option value="none">Does not repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekday">Every weekday (Mon–Fri)</option>
+        <option value="weekly">Weekly on the same day</option>
+        <option value="monthly">Monthly on the same date</option>
+        <option value="annually">Annually on the same date</option>
+      </select>
+    </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
       <button class="btn-save" onclick="saveTask()">Add Task</button>
@@ -602,10 +613,33 @@ function toggleRowStatus(id) {
   save();reRender();
 }
 
+function nextOccurrence(dueDate, repeat){
+  if(!dueDate || !repeat || repeat==='none') return null;
+  const d=new Date(dueDate+'T00:00:00');
+  if(repeat==='daily') d.setDate(d.getDate()+1);
+  else if(repeat==='weekday'){ do{d.setDate(d.getDate()+1);}while(d.getDay()===0||d.getDay()===6); }
+  else if(repeat==='weekly') d.setDate(d.getDate()+7);
+  else if(repeat==='monthly') d.setMonth(d.getMonth()+1);
+  else if(repeat==='annually') d.setFullYear(d.getFullYear()+1);
+  const pad=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+}
+
 function setStatus(id,status,e) {
   if(e) e.stopPropagation();
   const task=state.tasks.find(t=>t.id===id);
   if(!task) return;
+  if(status==='done' && task.repeat && task.repeat!=='none' && task.dueDate){
+    state.profile.xpTotal+=task.xp;
+    const next=nextOccurrence(task.dueDate,task.repeat);
+    task.dueDate=next;
+    task.status='todo';
+    task.xpAwarded=false;
+    showToast(`+${task.xp} XP · Next: ${next}`);
+    save();reRender();
+    if(gcalToken) gcalPushTask(task);
+    return;
+  }
   task.status=status;
   if(status==='done'&&!task.xpAwarded){
     task.xpAwarded=true;state.profile.xpTotal+=task.xp;
@@ -655,6 +689,7 @@ function openModal() {
   document.getElementById('m-due').style.display='none';
   document.getElementById('m-due-quick').value='';
   document.getElementById('m-time').value='';
+  document.getElementById('m-repeat').value='none';
   const lm={today:'today',pending:'pending',bucket:'bucket',habits:'today',kanban:'today',tomorrow:'tomorrow'};
   document.getElementById('m-list').value=lm[state.currentTab]||'today';
   document.getElementById('modal-overlay').classList.add('open');
@@ -672,8 +707,9 @@ function saveTask() {
   const desc=document.getElementById('m-desc').value.trim();
   const due=document.getElementById('m-due').value;
   const time=document.getElementById('m-time').value;
+  const repeat=document.getElementById('m-repeat').value;
   const id=state.nextId++;
-  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,xpAwarded:false});
+  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,repeat,xpAwarded:false});
   save();closeModal();reRender();showToast('Task added!');
 }
 
@@ -715,7 +751,9 @@ function taskItemHTML(task,actionsHTML) {
     ?`<span class="material-symbols-outlined filled" style="font-size:13px;color:#fff">check</span>`
     :(isInProg?`<span class="material-symbols-outlined" style="font-size:11px;color:#fff">play_arrow</span>`:'');
   const titleClass=isDone?'task-title done-txt':'task-title';
-  const dueHTML=task.dueDate?`<span style="font-size:11px;color:var(--muted);margin-left:6px">📅 ${task.dueDate}${task.dueTime?` · ${task.dueTime}`:''}</span>`:(task.dueTime?`<span style="font-size:11px;color:var(--muted);margin-left:6px">⏰ ${task.dueTime}</span>`:'');
+  const repLbl={daily:'Daily',weekday:'Weekdays',weekly:'Weekly',monthly:'Monthly',annually:'Yearly'}[task.repeat]||'';
+  const repHTML=repLbl?`<span style="font-size:11px;color:var(--muted);margin-left:6px">🔁 ${repLbl}</span>`:'';
+  const dueHTML=task.dueDate?`<span style="font-size:11px;color:var(--muted);margin-left:6px">📅 ${task.dueDate}${task.dueTime?` · ${task.dueTime}`:''}</span>${repHTML}`:(task.dueTime?`<span style="font-size:11px;color:var(--muted);margin-left:6px">⏰ ${task.dueTime}</span>${repHTML}`:repHTML);
   return `
 <div class="task-item${isDone?' done-item':''}" onclick="toggleRowStatus(${task.id})">
   <div class="task-row">
@@ -1200,6 +1238,19 @@ function gcalEventBody(task){
     body.start={date:task.dueDate};
     body.end  ={date:next};
   } else { return null; }
+  if(task.repeat && task.repeat!=='none'){
+    let rr=null;
+    if(task.repeat==='daily') rr='RRULE:FREQ=DAILY';
+    else if(task.repeat==='weekday') rr='RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
+    else if(task.repeat==='weekly'){
+      const days=['SU','MO','TU','WE','TH','FR','SA'];
+      const wd=new Date(task.dueDate+'T00:00:00').getDay();
+      rr='RRULE:FREQ=WEEKLY;BYDAY='+days[wd];
+    }
+    else if(task.repeat==='monthly') rr='RRULE:FREQ=MONTHLY';
+    else if(task.repeat==='annually') rr='RRULE:FREQ=YEARLY';
+    if(rr) body.recurrence=[rr];
+  }
   return body;
 }
 
