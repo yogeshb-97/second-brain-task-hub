@@ -445,17 +445,23 @@ body{
         <input class="form-input" id="m-tag" type="text" placeholder="e.g. Work"/>
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Due Date</label>
-      <select class="form-select" id="m-due-quick" onchange="handleDueQuick()">
-        <option value="">No due date</option>
-        <option value="today">Today</option>
-        <option value="tomorrow">Tomorrow</option>
-        <option value="weekend">This weekend</option>
-        <option value="nextweek">Next week</option>
-        <option value="custom">Pick a date…</option>
-      </select>
-      <input class="form-input" id="m-due" type="date" style="display:none;margin-top:8px;"/>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Due Date</label>
+        <select class="form-select" id="m-due-quick" onchange="handleDueQuick()">
+          <option value="">No due date</option>
+          <option value="today">Today</option>
+          <option value="tomorrow">Tomorrow</option>
+          <option value="weekend">This weekend</option>
+          <option value="nextweek">Next week</option>
+          <option value="custom">Pick a date…</option>
+        </select>
+        <input class="form-input" id="m-due" type="date" style="display:none;margin-top:8px;"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Time <span style="font-weight:400;color:var(--faint);">(optional)</span></label>
+        <input class="form-input" id="m-time" type="time" step="900"/>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
@@ -644,6 +650,7 @@ function openModal() {
   document.getElementById('m-due').value='';
   document.getElementById('m-due').style.display='none';
   document.getElementById('m-due-quick').value='';
+  document.getElementById('m-time').value='';
   const lm={today:'today',pending:'pending',bucket:'bucket',habits:'today',kanban:'today',tomorrow:'tomorrow'};
   document.getElementById('m-list').value=lm[state.currentTab]||'today';
   document.getElementById('modal-overlay').classList.add('open');
@@ -660,8 +667,9 @@ function saveTask() {
   const tag=document.getElementById('m-tag').value.trim()||'General';
   const desc=document.getElementById('m-desc').value.trim();
   const due=document.getElementById('m-due').value;
+  const time=document.getElementById('m-time').value;
   const id=state.nextId++;
-  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,xpAwarded:false});
+  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,xpAwarded:false});
   save();closeModal();reRender();showToast('Task added!');
 }
 
@@ -703,7 +711,7 @@ function taskItemHTML(task,actionsHTML) {
     ?`<span class="material-symbols-outlined filled" style="font-size:13px;color:#fff">check</span>`
     :(isInProg?`<span class="material-symbols-outlined" style="font-size:11px;color:#fff">play_arrow</span>`:'');
   const titleClass=isDone?'task-title done-txt':'task-title';
-  const dueHTML=task.dueDate?`<span style="font-size:11px;color:var(--muted);margin-left:6px">📅 ${task.dueDate}</span>`:'';
+  const dueHTML=task.dueDate?`<span style="font-size:11px;color:var(--muted);margin-left:6px">📅 ${task.dueDate}${task.dueTime?` · ${task.dueTime}`:''}</span>`:(task.dueTime?`<span style="font-size:11px;color:var(--muted);margin-left:6px">⏰ ${task.dueTime}</span>`:'');
   return `
 <div class="task-item${isDone?' done-item':''}" onclick="toggleRowStatus(${task.id})">
   <div class="task-row">
