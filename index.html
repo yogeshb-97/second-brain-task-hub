@@ -1156,19 +1156,27 @@ function gcalInitClient(){
   return gcalClient;
 }
 
-function gcalToggle(){
+function gcalToggle(ev){
+  if(ev && ev.shiftKey && gcalToken){
+    showToast('Forcing sync now…');
+    driveLoadRemote().then(()=>driveSaveRemote());
+    return;
+  }
   if(gcalToken && gcalTokenExpiry>Date.now()){
-    if(!confirm('Disconnect Google Calendar? Existing events on your calendar will stay.')) return;
+    if(!confirm('Disconnect Google? Calendar events stay; Drive state file stays.')) return;
     try{google.accounts.oauth2.revoke(gcalToken,()=>{});}catch(_){}
     gcalToken=null;gcalTokenExpiry=0;
     localStorage.removeItem('sb_gcal_token');
     localStorage.removeItem('sb_gcal_expiry');
     gcalUpdateBtn();
-    showToast('Google Calendar disconnected');
+    showToast('Disconnected');
     return;
   }
   const c=gcalInitClient();
-  if(c) c.requestAccessToken();
+  if(c){
+    const opts=localStorage.getItem('sb_gcal_consented_drive')?{}:{prompt:'consent'};
+    c.requestAccessToken(opts);
+  }
 }
 
 function gcalEventBody(task){
@@ -1337,16 +1345,53 @@ const _origSave=save;
 save=function(){_origSave.apply(this,arguments);driveScheduleSave();};
 
 const _origGcalCallback=gcalClient;
-function gcalAfterAuth(){
+async function gcalAfterAuth(){
+  localStorage.setItem('sb_gcal_consented_drive','1');
   driveFileId=null;_scopeReauthShown=false;
-  driveLoadRemote();
+  const scopeOk=await driveCheckScope();
+  if(!scopeOk){
+    showToast('Drive scope not granted — disconnect and reconnect');
+    return;
+  }
+  await driveLoadRemote();
+  await driveSaveRemote();
   gcalSyncAll();
 }
+
+async function driveCheckScope(){
+  if(!gcalToken) return false;
+  try{
+    const r=await fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?access_token='+encodeURIComponent(gcalToken));
+    const d=await r.json();
+    const scopes=(d.scope||'').split(' ');
+    const hasDrive=scopes.includes('https://www.googleapis.com/auth/drive.appdata');
+    console.log('[SB] OAuth scopes:',scopes,'hasDrive:',hasDrive);
+    return hasDrive;
+  }catch(e){console.warn('[SB] scope check failed',e);return false;}
+}
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible' && gcalToken) driveLoadRemote();
+});
+setInterval(()=>{if(gcalToken && document.visibilityState==='visible') driveLoadRemote();},20000);
 
 window.addEventListener('load',()=>{
   setTimeout(()=>{
     gcalRestore();
-    if(gcalToken) driveLoadRemote();
+    if(gcalToken){
+      driveCheckScope().then(ok=>{
+        if(!ok){
+          showToast('Re-authorize for sync — click 📅');
+          gcalToken=null;gcalTokenExpiry=0;
+          localStorage.removeItem('sb_gcal_token');
+          localStorage.removeItem('sb_gcal_expiry');
+          localStorage.removeItem('sb_gcal_consented_drive');
+          gcalUpdateBtn();
+        } else {
+          driveLoadRemote();
+        }
+      });
+    }
   },500);
 });
 
