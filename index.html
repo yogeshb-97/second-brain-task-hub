@@ -20,6 +20,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root {
   --bg:       #f8f9ff;
@@ -360,6 +361,9 @@ body{
         <span>Second Brain</span>
       </div>
       <div class="header-actions">
+        <button class="icon-btn" id="gcal-btn" onclick="gcalToggle()" title="Connect Google Calendar">
+          <span class="material-symbols-outlined" id="gcal-icon" style="font-size:18px">event</span>
+        </button>
         <button class="icon-btn" onclick="toggleTheme()" id="theme-btn" title="Toggle theme">
           <span class="material-symbols-outlined" id="theme-icon" style="font-size:18px">light_mode</span>
         </button>
@@ -1090,6 +1094,169 @@ load();
 initThemeIcon();
 renderTab('today');
 if(promotedCount>0) showToast(`${promotedCount} task${promotedCount>1?'s':''} moved to today`);
+
+const GCAL_CLIENT_ID='562122314100-jros5ij3ep1v4rtd4ctoaei20l0448ia.apps.googleusercontent.com';
+const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.events';
+const GCAL_TZ=Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Kolkata';
+let gcalToken=null, gcalTokenExpiry=0, gcalClient=null, gcalSyncing=false;
+
+function gcalRestore(){
+  try{
+    const t=localStorage.getItem('sb_gcal_token');
+    const e=parseInt(localStorage.getItem('sb_gcal_expiry')||'0');
+    if(t && e>Date.now()+30000){gcalToken=t;gcalTokenExpiry=e;}
+  }catch(_){}
+  gcalUpdateBtn();
+}
+
+function gcalUpdateBtn(){
+  const btn=document.getElementById('gcal-btn');
+  const icon=document.getElementById('gcal-icon');
+  if(!btn) return;
+  if(gcalToken && gcalTokenExpiry>Date.now()){
+    btn.title='Google Calendar connected — click to disconnect';
+    btn.style.background='#e8fdf4';
+    btn.style.borderColor='#006c49';
+    icon.textContent='event_available';
+    icon.style.color='#006c49';
+  } else {
+    btn.title='Connect Google Calendar';
+    btn.style.background='';
+    btn.style.borderColor='';
+    icon.textContent='event';
+    icon.style.color='';
+  }
+}
+
+function gcalInitClient(){
+  if(gcalClient) return gcalClient;
+  if(typeof google==='undefined'||!google.accounts){showToast('Google API still loading, try again');return null;}
+  gcalClient=google.accounts.oauth2.initTokenClient({
+    client_id:GCAL_CLIENT_ID,
+    scope:GCAL_SCOPE,
+    callback:(resp)=>{
+      if(resp.access_token){
+        gcalToken=resp.access_token;
+        gcalTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
+        localStorage.setItem('sb_gcal_token',gcalToken);
+        localStorage.setItem('sb_gcal_expiry',String(gcalTokenExpiry));
+        gcalUpdateBtn();
+        showToast('Google Calendar connected ✓');
+        gcalSyncAll();
+      } else if(resp.error){
+        showToast('Auth failed: '+resp.error);
+      }
+    },
+  });
+  return gcalClient;
+}
+
+function gcalToggle(){
+  if(gcalToken && gcalTokenExpiry>Date.now()){
+    if(!confirm('Disconnect Google Calendar? Existing events on your calendar will stay.')) return;
+    try{google.accounts.oauth2.revoke(gcalToken,()=>{});}catch(_){}
+    gcalToken=null;gcalTokenExpiry=0;
+    localStorage.removeItem('sb_gcal_token');
+    localStorage.removeItem('sb_gcal_expiry');
+    gcalUpdateBtn();
+    showToast('Google Calendar disconnected');
+    return;
+  }
+  const c=gcalInitClient();
+  if(c) c.requestAccessToken();
+}
+
+function gcalEventBody(task){
+  const summary=task.title;
+  const descParts=[];
+  if(task.desc) descParts.push(task.desc);
+  if(task.tag && task.tag!=='General') descParts.push('Tag: '+task.tag);
+  descParts.push('— Second Brain · '+task.list);
+  const body={summary,description:descParts.join('\n\n')};
+  if(task.dueDate && task.dueTime){
+    const start=task.dueDate+'T'+task.dueTime+':00';
+    const d=new Date(start);d.setMinutes(d.getMinutes()+30);
+    const pad=n=>String(n).padStart(2,'0');
+    const end=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes())+':00';
+    body.start={dateTime:start,timeZone:GCAL_TZ};
+    body.end  ={dateTime:end,  timeZone:GCAL_TZ};
+  } else if(task.dueDate){
+    const d=new Date(task.dueDate+'T00:00:00');d.setDate(d.getDate()+1);
+    const pad=n=>String(n).padStart(2,'0');
+    const next=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+    body.start={date:task.dueDate};
+    body.end  ={date:next};
+  } else { return null; }
+  return body;
+}
+
+async function gcalApi(method,path,body){
+  if(!gcalToken || gcalTokenExpiry<=Date.now()) throw new Error('not connected');
+  const res=await fetch('https://www.googleapis.com/calendar/v3'+path,{
+    method,headers:{'Authorization':'Bearer '+gcalToken,'Content-Type':'application/json'},
+    body:body?JSON.stringify(body):undefined,
+  });
+  if(res.status===401){gcalToken=null;localStorage.removeItem('sb_gcal_token');gcalUpdateBtn();throw new Error('token expired');}
+  if(!res.ok) throw new Error('gcal '+res.status);
+  return res.status===204?null:res.json();
+}
+
+async function gcalPushTask(task){
+  if(!gcalToken || gcalTokenExpiry<=Date.now()) return;
+  const body=gcalEventBody(task);
+  if(!body){
+    if(task.gcalEventId){
+      try{await gcalApi('DELETE','/calendars/primary/events/'+task.gcalEventId);}catch(_){}
+      delete task.gcalEventId;save();
+    }
+    return;
+  }
+  try{
+    if(task.gcalEventId){
+      await gcalApi('PATCH','/calendars/primary/events/'+task.gcalEventId,body);
+    } else {
+      const r=await gcalApi('POST','/calendars/primary/events',body);
+      task.gcalEventId=r.id;save();
+    }
+  }catch(e){console.warn('gcal push failed',e);}
+}
+
+async function gcalDeleteTask(task){
+  if(!gcalToken || !task.gcalEventId) return;
+  try{await gcalApi('DELETE','/calendars/primary/events/'+task.gcalEventId);}catch(_){}
+}
+
+async function gcalSyncAll(){
+  if(gcalSyncing) return;
+  gcalSyncing=true;
+  const targets=state.tasks.filter(t=>t.dueDate && t.status!=='done');
+  let n=0;
+  for(const t of targets){
+    await gcalPushTask(t);
+    n++;
+  }
+  gcalSyncing=false;
+  if(n>0) showToast(`Synced ${n} task${n>1?'s':''} to Calendar`);
+}
+
+const _origSaveTask=saveTask;
+saveTask=function(){
+  const oldLen=state.tasks.length;
+  _origSaveTask.apply(this,arguments);
+  if(state.tasks.length>oldLen){
+    const t=state.tasks[state.tasks.length-1];
+    if(t.dueDate) gcalPushTask(t);
+  }
+};
+
+const _origDeleteTask=deleteTask;
+deleteTask=function(id){
+  const t=state.tasks.find(x=>x.id===id);
+  if(t) gcalDeleteTask(t);
+  _origDeleteTask.apply(this,arguments);
+};
+
+window.addEventListener('load',()=>{setTimeout(gcalRestore,500);});
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
