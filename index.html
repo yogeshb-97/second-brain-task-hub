@@ -1096,12 +1096,17 @@ renderTab('today');
 if(promotedCount>0) showToast(`${promotedCount} task${promotedCount>1?'s':''} moved to today`);
 
 const GCAL_CLIENT_ID='562122314100-jros5ij3ep1v4rtd4ctoaei20l0448ia.apps.googleusercontent.com';
-const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.events';
+const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata';
 const GCAL_TZ=Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Kolkata';
 let gcalToken=null, gcalTokenExpiry=0, gcalClient=null, gcalSyncing=false;
 
 function gcalRestore(){
   try{
+    if(!localStorage.getItem('sb_gcal_scope_v2')){
+      localStorage.removeItem('sb_gcal_token');
+      localStorage.removeItem('sb_gcal_expiry');
+      localStorage.setItem('sb_gcal_scope_v2','1');
+    }
     const t=localStorage.getItem('sb_gcal_token');
     const e=parseInt(localStorage.getItem('sb_gcal_expiry')||'0');
     if(t && e>Date.now()+30000){gcalToken=t;gcalTokenExpiry=e;}
@@ -1141,8 +1146,8 @@ function gcalInitClient(){
         localStorage.setItem('sb_gcal_token',gcalToken);
         localStorage.setItem('sb_gcal_expiry',String(gcalTokenExpiry));
         gcalUpdateBtn();
-        showToast('Google Calendar connected ✓');
-        gcalSyncAll();
+        showToast('Google connected ✓ Syncing…');
+        gcalAfterAuth();
       } else if(resp.error){
         showToast('Auth failed: '+resp.error);
       }
@@ -1256,7 +1261,94 @@ deleteTask=function(id){
   _origDeleteTask.apply(this,arguments);
 };
 
-window.addEventListener('load',()=>{setTimeout(gcalRestore,500);});
+let driveFileId=null, _driveSaveTimer=null, _driveSaving=false, _drivePullingNow=false, _scopeReauthShown=false;
+
+async function driveFindFile(){
+  const r=await fetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,modifiedTime)&q='+encodeURIComponent("name='sb-state.json'"),{
+    headers:{'Authorization':'Bearer '+gcalToken}});
+  if(r.status===401){gcalToken=null;localStorage.removeItem('sb_gcal_token');gcalUpdateBtn();throw new Error('expired');}
+  if(r.status===403){throw new Error('scope-missing');}
+  if(!r.ok) throw new Error('drive '+r.status);
+  const d=await r.json();
+  return (d.files && d.files[0]) ? d.files[0].id : null;
+}
+
+async function driveLoadRemote(){
+  if(!gcalToken || gcalTokenExpiry<=Date.now() || _drivePullingNow) return;
+  _drivePullingNow=true;
+  try{
+    if(!driveFileId) driveFileId=await driveFindFile();
+    if(!driveFileId){_drivePullingNow=false;return;}
+    const r=await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,{
+      headers:{'Authorization':'Bearer '+gcalToken}});
+    if(!r.ok){_drivePullingNow=false;return;}
+    const remote=await r.json();
+    const localSaved=state.lastSaved||0;
+    const remoteSaved=remote.lastSaved||0;
+    if(remoteSaved > localSaved + 1000){
+      state=remote;
+      localStorage.setItem(STORE_KEY,JSON.stringify(state));
+      reRender();
+      showToast('Synced from your other device');
+    }
+  }catch(e){
+    if(e.message==='scope-missing' && !_scopeReauthShown){
+      _scopeReauthShown=true;
+      showToast('Click 📅 to re-authorize for cross-device sync');
+      gcalToken=null;localStorage.removeItem('sb_gcal_token');gcalUpdateBtn();
+    }
+  }
+  _drivePullingNow=false;
+}
+
+async function driveSaveRemote(){
+  if(!gcalToken || gcalTokenExpiry<=Date.now() || _driveSaving) return;
+  _driveSaving=true;
+  try{
+    state.lastSaved=Date.now();
+    localStorage.setItem(STORE_KEY,JSON.stringify(state));
+    if(!driveFileId){try{driveFileId=await driveFindFile();}catch(_){}}
+    if(driveFileId){
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,{
+        method:'PATCH',
+        headers:{'Authorization':'Bearer '+gcalToken,'Content-Type':'application/json'},
+        body:JSON.stringify(state)});
+    } else {
+      const boundary='sb'+Date.now();
+      const meta={name:'sb-state.json',parents:['appDataFolder']};
+      const body=`--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(state)}\r\n--${boundary}--`;
+      const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+gcalToken,'Content-Type':`multipart/related; boundary="${boundary}"`},
+        body});
+      if(r.ok){const d=await r.json();driveFileId=d.id;}
+    }
+  }catch(e){console.warn('drive save',e);}
+  _driveSaving=false;
+}
+
+function driveScheduleSave(){
+  if(!gcalToken) return;
+  clearTimeout(_driveSaveTimer);
+  _driveSaveTimer=setTimeout(driveSaveRemote,1500);
+}
+
+const _origSave=save;
+save=function(){_origSave.apply(this,arguments);driveScheduleSave();};
+
+const _origGcalCallback=gcalClient;
+function gcalAfterAuth(){
+  driveFileId=null;_scopeReauthShown=false;
+  driveLoadRemote();
+  gcalSyncAll();
+}
+
+window.addEventListener('load',()=>{
+  setTimeout(()=>{
+    gcalRestore();
+    if(gcalToken) driveLoadRemote();
+  },500);
+});
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
