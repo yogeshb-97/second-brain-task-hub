@@ -245,11 +245,11 @@ body{
 }
 @media(max-width:640px){
   .kanban-board{
-    display:flex;overflow-x:auto;scrollbar-width:none;
-    gap:10px;padding-bottom:4px;
+    display:flex;flex-direction:column;
+    gap:14px;padding-bottom:4px;
   }
-  .kanban-board::-webkit-scrollbar{display:none;}
-  .kanban-col{min-width:85vw;flex-shrink:0;}
+  .kanban-col{width:100%;}
+  .kanban-task{touch-action:auto;cursor:default;}
 }
 .kanban-col{
   background:var(--card-alt);border:1px solid var(--border);
