@@ -427,20 +427,6 @@ body{
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Difficulty</label>
-        <select class="form-select" id="m-diff" onchange="updateXP()">
-          <option value="Easy">Easy</option>
-          <option value="Medium" selected>Medium</option>
-          <option value="Hard">Hard</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">XP</label>
-        <input class="form-input" id="m-xp" type="number" value="150" min="1"/>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
         <label class="form-label">Add To</label>
         <select class="form-select" id="m-list">
           <option value="today">Today's Tasks</option>
@@ -455,8 +441,16 @@ body{
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Due Date (optional)</label>
-      <input class="form-input" id="m-due" type="date"/>
+      <label class="form-label">Due Date</label>
+      <select class="form-select" id="m-due-quick" onchange="handleDueQuick()">
+        <option value="">No due date</option>
+        <option value="today">Today</option>
+        <option value="tomorrow">Tomorrow</option>
+        <option value="weekend">This weekend</option>
+        <option value="nextweek">Next week</option>
+        <option value="custom">Pick a date…</option>
+      </select>
+      <input class="form-input" id="m-due" type="date" style="display:none;margin-top:8px;"/>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
@@ -622,17 +616,28 @@ function moveTask(id,list,e) {
 
 function reRender(){renderTab(state.currentTab);}
 
-function updateXP() {
-  const m={Easy:80,Medium:150,Hard:300};
-  document.getElementById('m-xp').value=m[document.getElementById('m-diff').value];
+function isoOffset(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);}
+function isoNextSaturday(){const d=new Date();const off=(6-d.getDay()+7)%7||7;d.setDate(d.getDate()+off);return d.toISOString().slice(0,10);}
+function isoNextMonday(){const d=new Date();const off=(1-d.getDay()+7)%7||7;d.setDate(d.getDate()+off);return d.toISOString().slice(0,10);}
+
+function handleDueQuick(){
+  const q=document.getElementById('m-due-quick').value;
+  const due=document.getElementById('m-due');
+  if(q==='custom'){due.style.display='block';due.focus();return;}
+  due.style.display='none';
+  if(q==='today')         due.value=isoOffset(0);
+  else if(q==='tomorrow') due.value=isoOffset(1);
+  else if(q==='weekend')  due.value=isoNextSaturday();
+  else if(q==='nextweek') due.value=isoNextMonday();
+  else                    due.value='';
 }
 
 function openModal() {
   document.getElementById('m-title').value='';
-  document.getElementById('m-diff').value='Medium';
-  document.getElementById('m-xp').value='150';
   document.getElementById('m-tag').value='';
   document.getElementById('m-due').value='';
+  document.getElementById('m-due').style.display='none';
+  document.getElementById('m-due-quick').value='';
   const lm={today:'today',pending:'pending',bucket:'bucket',habits:'today',kanban:'today',tomorrow:'tomorrow'};
   document.getElementById('m-list').value=lm[state.currentTab]||'today';
   document.getElementById('modal-overlay').classList.add('open');
@@ -645,13 +650,11 @@ function handleOverlayClick(e){if(e.target===document.getElementById('modal-over
 function saveTask() {
   const title=document.getElementById('m-title').value.trim();
   if(!title){document.getElementById('m-title').focus();return;}
-  const diff=document.getElementById('m-diff').value;
-  const xp=parseInt(document.getElementById('m-xp').value)||150;
   const list=document.getElementById('m-list').value;
   const tag=document.getElementById('m-tag').value.trim()||'General';
   const due=document.getElementById('m-due').value;
   const id=state.nextId++;
-  state.tasks.push({id,title,diff,xp,tag,list,status:'todo',dueDate:due,xpAwarded:false});
+  state.tasks.push({id,title,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,xpAwarded:false});
   save();closeModal();reRender();showToast('Task added!');
 }
 
