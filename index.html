@@ -463,9 +463,23 @@ body{
         <input class="form-input" id="m-due" type="date" style="display:none;margin-top:8px;"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Time <span style="font-weight:400;color:var(--faint);">(optional)</span></label>
+        <label class="form-label">Start Time</label>
         <input class="form-input" id="m-time" type="time" step="900"/>
       </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Duration</label>
+      <select class="form-select" id="m-duration">
+        <option value="">No duration</option>
+        <option value="15">15 minutes</option>
+        <option value="30" selected>30 minutes</option>
+        <option value="45">45 minutes</option>
+        <option value="60">1 hour</option>
+        <option value="90">1.5 hours</option>
+        <option value="120">2 hours</option>
+        <option value="180">3 hours</option>
+        <option value="240">4 hours</option>
+      </select>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -516,9 +530,10 @@ const SEED_TASKS = [
   {id:16,title:'Launch a side project',diff:'Hard',xp:450,tag:'Work',list:'bucket',status:'todo',dueDate:'',xpAwarded:false},
 ];
 const SEED_HABITS = [
-  {id:1,name:'Hydration',icon:'water_drop',color:'#3525cd',target:8,current:7,xp:25,done:false,unit:'glasses'},
-  {id:2,name:'Reading',icon:'menu_book',color:'#684000',target:45,current:10,xp:50,done:false,unit:'mins'},
-  {id:3,name:'Meditation',icon:'self_improvement',color:'#006c49',target:20,current:20,xp:30,done:true,unit:'mins'},
+  {id:1,name:'Morning Meditation',color:'#3525cd',pct:85,streak:6,days:[1,1,1,1,1,1,0]},
+  {id:2,name:'Daily Exercise',    color:'#006c49',pct:71,streak:5,days:[1,1,0,1,1,1,0]},
+  {id:3,name:'Read 30 mins',      color:'#684000',pct:57,streak:4,days:[1,1,0,0,1,1,0]},
+  {id:4,name:'Journaling',        color:'#ba1a1a',pct:42,streak:3,days:[1,0,0,1,0,1,0]},
 ];
 
 let state = {
@@ -570,6 +585,7 @@ function load() {
     state.habits = SEED_HABITS.map(h=>({...h}));
   }
   if (!state.habits || !state.habits.length) state.habits = SEED_HABITS.map(h=>({...h}));
+  if (state.habits.length && !state.habits[0].days) state.habits = SEED_HABITS.map(h=>({...h}));
 
   if (state.lastOpenDate && state.lastOpenDate !== TODAY_ISO) {
     let n=0;
@@ -699,6 +715,7 @@ function openModal() {
   document.getElementById('m-due').style.display='none';
   document.getElementById('m-due-quick').value='';
   document.getElementById('m-time').value='';
+  document.getElementById('m-duration').value='30';
   document.getElementById('m-repeat').value='none';
   populateFolderSelect();
   document.getElementById('m-folder').value=
@@ -721,10 +738,11 @@ function saveTask() {
   const desc=document.getElementById('m-desc').value.trim();
   const due=document.getElementById('m-due').value;
   const time=document.getElementById('m-time').value;
+  const duration=parseInt(document.getElementById('m-duration').value)||0;
   const repeat=document.getElementById('m-repeat').value;
   const folder=document.getElementById('m-folder').value||'';
   const id=state.nextId++;
-  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,repeat,folder,xpAwarded:false});
+  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,dueDuration:duration,repeat,folder,xpAwarded:false});
   save();closeModal();reRender();showToast('Task added!');
 }
 
@@ -768,7 +786,14 @@ function taskItemHTML(task,actionsHTML) {
   const titleClass=isDone?'task-title done-txt':'task-title';
   const repLbl={daily:'Daily',weekday:'Weekdays',weekly:'Weekly',monthly:'Monthly',annually:'Yearly'}[task.repeat]||'';
   const repHTML=repLbl?`<span style="font-size:11px;color:var(--muted);margin-left:6px">🔁 ${repLbl}</span>`:'';
-  const dueHTML=task.dueDate?`<span style="font-size:11px;color:var(--muted);margin-left:6px">📅 ${task.dueDate}${task.dueTime?` · ${task.dueTime}`:''}</span>${repHTML}`:(task.dueTime?`<span style="font-size:11px;color:var(--muted);margin-left:6px">⏰ ${task.dueTime}</span>${repHTML}`:repHTML);
+  function fmtTime(t){if(!t)return '';const [h,m]=t.split(':').map(Number);const ap=h>=12?'PM':'AM';const h12=((h+11)%12)+1;return `${h12}:${String(m).padStart(2,'0')} ${ap}`;}
+  function addMins(t,mins){const [h,m]=t.split(':').map(Number);const total=h*60+m+mins;const eh=Math.floor((total%(24*60))/60),em=total%60;return String(eh).padStart(2,'0')+':'+String(em).padStart(2,'0');}
+  let timeRange='';
+  if(task.dueTime){
+    timeRange=fmtTime(task.dueTime);
+    if(task.dueDuration) timeRange+=' – '+fmtTime(addMins(task.dueTime,task.dueDuration));
+  }
+  const dueHTML=task.dueDate?`<span style="font-size:11px;color:var(--muted);margin-left:6px">📅 ${task.dueDate}${timeRange?' · '+timeRange:''}</span>${repHTML}`:(timeRange?`<span style="font-size:11px;color:var(--muted);margin-left:6px">⏰ ${timeRange}</span>${repHTML}`:repHTML);
   return `
 <div class="task-item${isDone?' done-item':''}" onclick="toggleRowStatus(${task.id})">
   <div class="task-row">
@@ -1003,13 +1028,40 @@ function handleFolderChange(){
   sel.value=name;
 }
 
-const HABITS_DISPLAY=[
-  {name:'Morning Meditation',color:'#3525cd',pct:85,streak:6,days:[1,1,1,1,1,1,0]},
-  {name:'Daily Exercise',color:'#006c49',pct:71,streak:5,days:[1,1,0,1,1,1,0]},
-  {name:'Read 30 mins',color:'#684000',pct:57,streak:4,days:[1,1,0,0,1,1,0]},
-  {name:'Journaling',color:'#ba1a1a',pct:42,streak:3,days:[1,0,0,1,0,1,0]},
-];
+const HABIT_COLORS=['#3525cd','#006c49','#684000','#ba1a1a','#9c27b0','#0288d1'];
 const HEAT_SEED=[0,1,2,3,2,1,0,2,3,1,0,2,1,3,2,0,1,2,3,1,2,0,1,3,2,1,0,2,1,0,3,2,1,0,2,3,1,2,0,1,2,3,2,1,0,3,2,1,0,2,1,0,3,2,1,2,0,1,3,2,1,0,2,3,1,0,2,1,3,0,1,2,3,1,0,2,1,3,2,0,1,2,3,2];
+
+function deleteHabit(id,e){
+  if(e) e.stopPropagation();
+  const h=state.habits.find(x=>x.id===id);
+  if(!h) return;
+  if(!confirm(`Delete habit "${h.name}"?`)) return;
+  state.habits=state.habits.filter(x=>x.id!==id);
+  save();reRender();
+}
+
+function addHabitPrompt(){
+  const name=(prompt('Habit name:')||'').trim();
+  if(!name) return;
+  const id=Math.max(0,...state.habits.map(h=>h.id))+1;
+  const color=HABIT_COLORS[state.habits.length%HABIT_COLORS.length];
+  state.habits.push({id,name,color,pct:0,streak:0,days:[0,0,0,0,0,0,0]});
+  save();reRender();
+  showToast(`Habit "${name}" added`);
+}
+
+function toggleHabitToday(id){
+  const h=state.habits.find(x=>x.id===id);
+  if(!h) return;
+  const today=(new Date().getDay()+6)%7;
+  h.days=h.days.slice();
+  h.days[today]=h.days[today]?0:1;
+  const sum=h.days.reduce((a,b)=>a+b,0);
+  h.pct=Math.round(sum/7*100);
+  let s=0;for(let i=today;i>=0;i--){if(h.days[i])s++;else break;}
+  h.streak=s;
+  save();reRender();
+}
 
 function renderHabits() {
   let html=`
@@ -1021,27 +1073,36 @@ function renderHabits() {
   </div>
 </div>`;
 
-  HABITS_DISPLAY.forEach(h=>{
+  (state.habits||[]).forEach(h=>{
     const r=22,circ=2*Math.PI*r;
-    const dash=(h.pct/100)*circ,gap=circ-dash;
-    const dots=h.days.map(d=>`<span class="s-dot${d?' hit':''}"></span>`).join('');
+    const pct=h.pct||0;
+    const dash=(pct/100)*circ,gap=circ-dash;
+    const days=h.days||[0,0,0,0,0,0,0];
+    const dots=days.map(d=>`<span class="s-dot${d?' hit':''}"></span>`).join('');
     html+=`
-<div class="habit-card">
-  <div class="habit-ring-wrap">
+<div class="habit-card" style="position:relative">
+  <div class="habit-ring-wrap" onclick="toggleHabitToday(${h.id})" style="cursor:pointer" title="Toggle today">
     <svg width="52" height="52" viewBox="0 0 52 52">
       <circle cx="26" cy="26" r="${r}" fill="none" stroke="var(--border)" stroke-width="4"/>
       <circle cx="26" cy="26" r="${r}" fill="none" stroke="${h.color}" stroke-width="4"
         stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}" stroke-linecap="round"/>
     </svg>
-    <div class="habit-ring-inner" style="color:${h.color}">${h.pct}%</div>
+    <div class="habit-ring-inner" style="color:${h.color}">${pct}%</div>
   </div>
   <div class="habit-info">
-    <div class="habit-name" style="border-left:3px solid ${h.color};padding-left:8px">${h.name}</div>
-    <div class="habit-streak"><div class="streak-dots">${dots}</div><span>${h.streak} day streak</span></div>
+    <div class="habit-name" style="border-left:3px solid ${h.color};padding-left:8px">${escHtml(h.name)}</div>
+    <div class="habit-streak"><div class="streak-dots">${dots}</div><span>${h.streak||0} day streak</span></div>
   </div>
-  <div class="habit-pct" style="color:${h.color}">${h.pct}%</div>
+  <button class="del-btn" onclick="deleteHabit(${h.id},event)" title="Delete habit"
+    style="position:absolute;top:8px;right:8px;width:26px;height:26px">
+    <span class="material-symbols-outlined" style="font-size:14px">delete</span>
+  </button>
 </div>`;
   });
+
+  if(!state.habits || !state.habits.length){
+    html+=`<div style="text-align:center;color:var(--muted);padding:30px 0;font-size:14px">No habits yet — add one below.</div>`;
+  }
 
   const lvl=['','l1','l2','l3','l4'];
   html+=`
@@ -1058,7 +1119,7 @@ function renderHabits() {
   </div>
 </div>
 <div style="text-align:center;margin-top:16px">
-  <button class="act-btn" onclick="showToast('Habit editor coming soon!')">
+  <button class="act-btn primary" onclick="addHabitPrompt()">
     <span class="material-symbols-outlined" style="font-size:14px">add</span> New Habit
   </button>
 </div>`;
@@ -1293,7 +1354,8 @@ function gcalEventBody(task){
   const body={summary,description:descParts.join('\n\n')};
   if(task.dueDate && task.dueTime){
     const start=task.dueDate+'T'+task.dueTime+':00';
-    const d=new Date(start);d.setMinutes(d.getMinutes()+30);
+    const dur=task.dueDuration||30;
+    const d=new Date(start);d.setMinutes(d.getMinutes()+dur);
     const pad=n=>String(n).padStart(2,'0');
     const end=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes())+':00';
     body.start={dateTime:start,timeZone:GCAL_TZ};
