@@ -239,6 +239,10 @@ body{
 [data-theme="dark"] .h-cell.l2{background:#3d31a0;}
 [data-theme="dark"] .h-cell.l3{background:#4e3dc0;}
 [data-theme="dark"] .h-cell.l4{background:#6351e8;}
+.hh-grid{display:grid;grid-template-columns:repeat(12,9px);grid-template-rows:repeat(7,9px);grid-auto-flow:column;gap:2px;margin-top:10px;}
+.hh-cell{width:9px;height:9px;border-radius:2px;background:var(--border);}
+.hh-cell.hh-empty{visibility:hidden;}
+.hh-legend{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:10px;color:var(--muted);}
 
 .kanban-filter{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
 .kanban-board{
@@ -530,10 +534,10 @@ const SEED_TASKS = [
   {id:16,title:'Launch a side project',diff:'Hard',xp:450,tag:'Work',list:'bucket',status:'todo',dueDate:'',xpAwarded:false},
 ];
 const SEED_HABITS = [
-  {id:1,name:'Morning Meditation',color:'#3525cd',pct:85,streak:6,days:[1,1,1,1,1,1,0]},
-  {id:2,name:'Daily Exercise',    color:'#006c49',pct:71,streak:5,days:[1,1,0,1,1,1,0]},
-  {id:3,name:'Read 30 mins',      color:'#684000',pct:57,streak:4,days:[1,1,0,0,1,1,0]},
-  {id:4,name:'Journaling',        color:'#ba1a1a',pct:42,streak:3,days:[1,0,0,1,0,1,0]},
+  {id:1,name:'Morning Meditation',color:'#3525cd',pct:85,streak:6,days:[1,1,1,1,1,1,0],log:{}},
+  {id:2,name:'Daily Exercise',    color:'#006c49',pct:71,streak:5,days:[1,1,0,1,1,1,0],log:{}},
+  {id:3,name:'Read 30 mins',      color:'#684000',pct:57,streak:4,days:[1,1,0,0,1,1,0],log:{}},
+  {id:4,name:'Journaling',        color:'#ba1a1a',pct:42,streak:3,days:[1,0,0,1,0,1,0],log:{}},
 ];
 
 let state = {
@@ -578,14 +582,20 @@ function load() {
         state.habits = SEED_HABITS.map(h=>({...h}));
         state.nextId = 17;
         state.profile = {xpTotal:3250,streak:12};
+        state.seeded = true;
       }
     }
   } catch(e) {
     state.tasks = SEED_TASKS.map(t=>({...t}));
     state.habits = SEED_HABITS.map(h=>({...h}));
+    state.seeded = true;
   }
-  if (!state.habits || !state.habits.length) state.habits = SEED_HABITS.map(h=>({...h}));
-  if (state.habits.length && !state.habits[0].days) state.habits = SEED_HABITS.map(h=>({...h}));
+  if(!Array.isArray(state.habits)) state.habits=[];
+  if(!Array.isArray(state.tasks)) state.tasks=[];
+  state.habits.forEach(h=>{
+    if(!Array.isArray(h.days)) h.days=[0,0,0,0,0,0,0];
+    if(!h.log || typeof h.log!=='object') h.log={};
+  });
 
   if (state.lastOpenDate && state.lastOpenDate !== TODAY_ISO) {
     let n=0;
@@ -593,10 +603,11 @@ function load() {
     promotedCount=n;
   }
   state.lastOpenDate = TODAY_ISO;
-  save();
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
 function save() {
+  state.lastSaved = Date.now();
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
@@ -1029,7 +1040,25 @@ function handleFolderChange(){
 }
 
 const HABIT_COLORS=['#3525cd','#006c49','#684000','#ba1a1a','#9c27b0','#0288d1'];
-const HEAT_SEED=[0,1,2,3,2,1,0,2,3,1,0,2,1,3,2,0,1,2,3,1,2,0,1,3,2,1,0,2,1,0,3,2,1,0,2,3,1,2,0,1,2,3,2,1,0,3,2,1,0,2,1,0,3,2,1,2,0,1,3,2,1,0,2,3,1,0,2,1,3,0,1,2,3,1,0,2,1,3,2,0,1,2,3,2];
+
+function isoFromDate(d){return d.toISOString().slice(0,10);}
+function habitHeatmapHTML(h){
+  const log=h.log||{};
+  const today=new Date();today.setHours(0,0,0,0);
+  const dow=(today.getDay()+6)%7;
+  const start=new Date(today);start.setDate(today.getDate()-dow-11*7);
+  const cells=[];
+  for(let col=0;col<12;col++){
+    for(let row=0;row<7;row++){
+      const d=new Date(start);d.setDate(start.getDate()+col*7+row);
+      if(d>today){cells.push(`<div class="hh-cell hh-empty"></div>`);continue;}
+      const iso=isoFromDate(d);
+      const done=!!log[iso];
+      cells.push(`<div class="hh-cell" style="background:${done?h.color:'var(--border)'}" title="${iso}${done?' ✓':''}"></div>`);
+    }
+  }
+  return `<div class="hh-grid" aria-label="Last 12 weeks">${cells.join('')}</div>`;
+}
 
 function deleteHabit(id,e){
   if(e) e.stopPropagation();
@@ -1045,7 +1074,7 @@ function addHabitPrompt(){
   if(!name) return;
   const id=Math.max(0,...state.habits.map(h=>h.id))+1;
   const color=HABIT_COLORS[state.habits.length%HABIT_COLORS.length];
-  state.habits.push({id,name,color,pct:0,streak:0,days:[0,0,0,0,0,0,0]});
+  state.habits.push({id,name,color,pct:0,streak:0,days:[0,0,0,0,0,0,0],log:{}});
   save();reRender();
   showToast(`Habit "${name}" added`);
 }
@@ -1056,9 +1085,12 @@ function toggleHabitToday(id){
   const today=(new Date().getDay()+6)%7;
   h.days=h.days.slice();
   h.days[today]=h.days[today]?0:1;
+  h.log=h.log||{};
+  if(h.days[today]) h.log[TODAY_ISO]=1; else delete h.log[TODAY_ISO];
   const sum=h.days.reduce((a,b)=>a+b,0);
   h.pct=Math.round(sum/7*100);
-  let s=0;for(let i=today;i>=0;i--){if(h.days[i])s++;else break;}
+  let s=0;const d=new Date();d.setHours(0,0,0,0);
+  while(h.log[isoFromDate(d)]){s++;d.setDate(d.getDate()-1);}
   h.streak=s;
   save();reRender();
 }
@@ -1079,8 +1111,9 @@ function renderHabits() {
     const dash=(pct/100)*circ,gap=circ-dash;
     const days=h.days||[0,0,0,0,0,0,0];
     const dots=days.map(d=>`<span class="s-dot${d?' hit':''}"></span>`).join('');
+    const doneCount=Object.values(h.log||{}).filter(Boolean).length;
     html+=`
-<div class="habit-card" style="position:relative">
+<div class="habit-card" style="position:relative;align-items:flex-start">
   <div class="habit-ring-wrap" onclick="toggleHabitToday(${h.id})" style="cursor:pointer" title="Toggle today">
     <svg width="52" height="52" viewBox="0 0 52 52">
       <circle cx="26" cy="26" r="${r}" fill="none" stroke="var(--border)" stroke-width="4"/>
@@ -1092,6 +1125,8 @@ function renderHabits() {
   <div class="habit-info">
     <div class="habit-name" style="border-left:3px solid ${h.color};padding-left:8px">${escHtml(h.name)}</div>
     <div class="habit-streak"><div class="streak-dots">${dots}</div><span>${h.streak||0} day streak</span></div>
+    ${habitHeatmapHTML(h)}
+    <div class="hh-legend"><span>Last 12 weeks</span><span>·</span><span>${doneCount} day${doneCount===1?'':'s'} done</span></div>
   </div>
   <button class="del-btn" onclick="deleteHabit(${h.id},event)" title="Delete habit"
     style="position:absolute;top:8px;right:8px;width:26px;height:26px">
@@ -1104,20 +1139,7 @@ function renderHabits() {
     html+=`<div style="text-align:center;color:var(--muted);padding:30px 0;font-size:14px">No habits yet — add one below.</div>`;
   }
 
-  const lvl=['','l1','l2','l3','l4'];
   html+=`
-<div class="heatmap-card">
-  <div style="font-size:13px;font-weight:700;color:var(--text)">Consistency Heatmap</div>
-  <div style="font-size:11px;color:var(--muted);margin-top:2px">Last 12 weeks</div>
-  <div class="heatmap-grid">
-    ${HEAT_SEED.map(v=>`<div class="h-cell ${lvl[v]}"></div>`).join('')}
-  </div>
-  <div style="display:flex;align-items:center;gap:4px;margin-top:8px;justify-content:flex-end">
-    <span style="font-size:11px;color:var(--muted)">Less</span>
-    ${[0,1,2,3,4].map(v=>`<div class="h-cell ${lvl[v]}" style="width:12px;height:12px;flex-shrink:0"></div>`).join('')}
-    <span style="font-size:11px;color:var(--muted)">More</span>
-  </div>
-</div>
 <div style="text-align:center;margin-top:16px">
   <button class="act-btn primary" onclick="addHabitPrompt()">
     <span class="material-symbols-outlined" style="font-size:14px">add</span> New Habit
