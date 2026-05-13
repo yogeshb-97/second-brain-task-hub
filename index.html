@@ -1396,7 +1396,23 @@ window.addEventListener('load',()=>{
 });
 
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing;
+      if(!nw) return;
+      nw.addEventListener('statechange',()=>{
+        if(nw.state==='activated' && navigator.serviceWorker.controller){
+          showToast('App updated — refreshing…');
+          setTimeout(()=>location.reload(),900);
+        }
+      });
+    });
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(reloaded) return;reloaded=true;location.reload();
+    });
+    setInterval(()=>reg.update().catch(()=>{}),60000);
+  }).catch(()=>{});
 }
 </script>
 </body>
