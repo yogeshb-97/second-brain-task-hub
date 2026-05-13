@@ -467,16 +467,22 @@ body{
         <input class="form-input" id="m-time" type="time" step="900"/>
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Repeat</label>
-      <select class="form-select" id="m-repeat">
-        <option value="none">Does not repeat</option>
-        <option value="daily">Daily</option>
-        <option value="weekday">Every weekday (Mon–Fri)</option>
-        <option value="weekly">Weekly on the same day</option>
-        <option value="monthly">Monthly on the same date</option>
-        <option value="annually">Annually on the same date</option>
-      </select>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Repeat</label>
+        <select class="form-select" id="m-repeat">
+          <option value="none">Does not repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekday">Every weekday (Mon–Fri)</option>
+          <option value="weekly">Weekly on the same day</option>
+          <option value="monthly">Monthly on the same date</option>
+          <option value="annually">Annually on the same date</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Folder</label>
+        <select class="form-select" id="m-folder" onchange="handleFolderChange()"></select>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
@@ -518,7 +524,9 @@ const SEED_HABITS = [
 let state = {
   tasks:[],nextId:17,habits:[],
   profile:{xpTotal:3250,streak:12},
-  currentTab:'today',lastOpenDate:''
+  currentTab:'today',lastOpenDate:'',
+  folders:['Work','Personal'],
+  bucketFolder:'all'
 };
 let pendingSearch='';
 let pendingFilter='All';
@@ -548,6 +556,8 @@ function load() {
       if (s) {
         const parsed = JSON.parse(s);
         state = {...state, ...parsed};
+        if(!Array.isArray(state.folders)||state.folders.length===0) state.folders=['Work','Personal'];
+        if(!state.bucketFolder) state.bucketFolder='all';
       } else {
         state.tasks = SEED_TASKS.map(t=>({...t}));
         state.habits = SEED_HABITS.map(h=>({...h}));
@@ -690,6 +700,10 @@ function openModal() {
   document.getElementById('m-due-quick').value='';
   document.getElementById('m-time').value='';
   document.getElementById('m-repeat').value='none';
+  populateFolderSelect();
+  document.getElementById('m-folder').value=
+    (state.currentTab==='bucket' && state.bucketFolder!=='all' && state.folders.includes(state.bucketFolder))
+      ? state.bucketFolder : '';
   const lm={today:'today',pending:'pending',bucket:'bucket',habits:'today',kanban:'today',tomorrow:'tomorrow'};
   document.getElementById('m-list').value=lm[state.currentTab]||'today';
   document.getElementById('modal-overlay').classList.add('open');
@@ -708,8 +722,9 @@ function saveTask() {
   const due=document.getElementById('m-due').value;
   const time=document.getElementById('m-time').value;
   const repeat=document.getElementById('m-repeat').value;
+  const folder=document.getElementById('m-folder').value||'';
   const id=state.nextId++;
-  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,repeat,xpAwarded:false});
+  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,repeat,folder,xpAwarded:false});
   save();closeModal();reRender();showToast('Task added!');
 }
 
@@ -763,7 +778,7 @@ function taskItemHTML(task,actionsHTML) {
       ${task.desc?`<div class="task-desc">${escHtml(task.desc)}</div>`:''}
       <div class="task-badges">
         ${diffBadgeHTML(task.diff)}
-        ${task.tag?`<span class="tag-badge">${escHtml(task.tag)}</span>`:''}
+        ${task.tag?`<span class="tag-badge">${escHtml(task.tag)}</span>`:''}${task.folder?`<span class="tag-badge" style="background:#e2dfff;color:#3525cd">📁 ${escHtml(task.folder)}</span>`:''}
         <span class="xp-badge">⚡${task.xp} XP</span>
       </div>
     </div>
@@ -911,14 +926,26 @@ function renderPending() {
 }
 
 function renderBucket() {
-  const tasks=state.tasks.filter(t=>t.list==='bucket');
+  const all=state.tasks.filter(t=>t.list==='bucket');
+  const f=state.bucketFolder||'all';
+  const tasks=(f==='all')?all:(f==='__unsorted__'?all.filter(t=>!t.folder):all.filter(t=>t.folder===f));
+  const chipsHTML=`
+<div class="pills-row" style="margin-bottom:14px">
+  <span class="pill${f==='all'?' active-pill':''}" onclick="setBucketFolder('all')">All Folders <span style="opacity:.6">${all.length}</span></span>
+  ${state.folders.map(fn=>{
+    const c=all.filter(t=>t.folder===fn).length;
+    return `<span class="pill${f===fn?' active-pill':''}" onclick="setBucketFolder(${JSON.stringify(fn).replace(/"/g,'&quot;')})">${escHtml(fn)} <span style="opacity:.6">${c}</span> <span onclick="event.stopPropagation();removeFolder(${JSON.stringify(fn).replace(/"/g,'&quot;')})" style="margin-left:4px;opacity:.5;cursor:pointer" title="Delete folder">×</span></span>`;
+  }).join('')}
+  ${all.some(t=>!t.folder)?`<span class="pill${f==='__unsorted__'?' active-pill':''}" onclick="setBucketFolder('__unsorted__')">Unsorted <span style="opacity:.6">${all.filter(t=>!t.folder).length}</span></span>`:''}
+  <span class="pill" style="border-style:dashed" onclick="addFolderPrompt()">+ New folder</span>
+</div>`;
   let html=`
 <div class="info-banner">
   <span class="material-symbols-outlined" style="font-size:18px;color:#3525cd">inventory_2</span>
-  <span>Bucket List — Someday goals and ideas. Move to Today or Pending when ready.</span>
-</div>`;
+  <span>Bucket List — Someday goals and ideas. Organise by folder, move to Today or Pending when ready.</span>
+</div>${chipsHTML}`;
   if(!tasks.length){
-    html+=`<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:14px">Your bucket list is empty. Add some big goals!</div>`;
+    html+=`<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:14px">${all.length?'No tasks in this folder.':'Your bucket list is empty. Add some big goals!'}</div>`;
   } else {
     tasks.forEach(t=>{
       html+=taskItemHTML(t,`
@@ -934,6 +961,46 @@ function renderBucket() {
     });
   }
   return html;
+}
+
+function setBucketFolder(f){state.bucketFolder=f;save();reRender();}
+
+function addFolderPrompt(){
+  const name=(prompt('New folder name:')||'').trim();
+  if(!name) return;
+  if(state.folders.includes(name)){showToast('Folder already exists');return;}
+  state.folders.push(name);
+  state.bucketFolder=name;
+  save();reRender();
+  showToast(`Folder "${name}" added`);
+}
+
+function removeFolder(name){
+  if(!confirm(`Delete folder "${name}"? Tasks inside become Unsorted.`)) return;
+  state.folders=state.folders.filter(f=>f!==name);
+  state.tasks.forEach(t=>{if(t.folder===name) t.folder='';});
+  if(state.bucketFolder===name) state.bucketFolder='all';
+  save();reRender();
+}
+
+function populateFolderSelect(){
+  const sel=document.getElementById('m-folder');
+  if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML=`<option value="">No folder</option>`+
+    state.folders.map(f=>`<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')+
+    `<option value="__new__">+ New folder…</option>`;
+  if(cur && cur!=='__new__') sel.value=cur;
+}
+
+function handleFolderChange(){
+  const sel=document.getElementById('m-folder');
+  if(sel.value!=='__new__') return;
+  const name=(prompt('New folder name:')||'').trim();
+  if(!name){sel.value='';return;}
+  if(!state.folders.includes(name)){state.folders.push(name);save();}
+  populateFolderSelect();
+  sel.value=name;
 }
 
 const HABITS_DISPLAY=[
