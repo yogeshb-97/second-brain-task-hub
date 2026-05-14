@@ -1495,7 +1495,7 @@ deleteTask=function(id){
   _origDeleteTask.apply(this,arguments);
 };
 
-let driveFileId=null, _driveSaveTimer=null, _driveSaving=false, _drivePullingNow=false, _scopeReauthShown=false;
+let driveFileId=null, _driveSaveTimer=null, _driveSaving=false, _drivePullingNow=false, _scopeReauthShown=false, _driveLastModified=null;
 
 async function driveFindFile(){
   const r=await fetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,modifiedTime)&q='+encodeURIComponent("name='sb-state.json'"),{
@@ -1507,15 +1507,25 @@ async function driveFindFile(){
   return (d.files && d.files[0]) ? d.files[0].id : null;
 }
 
-async function driveLoadRemote(){
+async function driveLoadRemote(force){
   if(!gcalToken || gcalTokenExpiry<=Date.now() || _drivePullingNow) return;
   _drivePullingNow=true;
   try{
     if(!driveFileId) driveFileId=await driveFindFile();
     if(!driveFileId){_drivePullingNow=false;return;}
+    let observedModified=null;
+    if(!force){
+      const h=await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=modifiedTime`,{
+        headers:{'Authorization':'Bearer '+gcalToken}});
+      if(h.ok){
+        observedModified=(await h.json()).modifiedTime;
+        if(_driveLastModified && observedModified===_driveLastModified){_drivePullingNow=false;return;}
+      }
+    }
     const r=await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,{
       headers:{'Authorization':'Bearer '+gcalToken}});
     if(!r.ok){_drivePullingNow=false;return;}
+    if(observedModified) _driveLastModified=observedModified;
     const remote=await r.json();
     const localSaved=state.lastSaved||0;
     const remoteSaved=remote.lastSaved||0;
@@ -1557,6 +1567,13 @@ async function driveSaveRemote(){
         body});
       if(r.ok){const d=await r.json();driveFileId=d.id;}
     }
+    if(driveFileId){
+      try{
+        const h=await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=modifiedTime`,{
+          headers:{'Authorization':'Bearer '+gcalToken}});
+        if(h.ok) _driveLastModified=(await h.json()).modifiedTime;
+      }catch(_){}
+    }
   }catch(e){console.warn('drive save',e);}
   _driveSaving=false;
 }
@@ -1565,6 +1582,22 @@ function driveScheduleSave(){
   if(!gcalToken) return;
   clearTimeout(_driveSaveTimer);
   _driveSaveTimer=setTimeout(driveSaveRemote,1500);
+}
+
+function driveFlushNow(){
+  if(!_driveSaveTimer) return;
+  clearTimeout(_driveSaveTimer);_driveSaveTimer=null;
+  if(!gcalToken || gcalTokenExpiry<=Date.now() || !driveFileId) return;
+  try{
+    state.lastSaved=Date.now();
+    localStorage.setItem(STORE_KEY,JSON.stringify(state));
+    fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,{
+      method:'PATCH',
+      headers:{'Authorization':'Bearer '+gcalToken,'Content-Type':'application/json'},
+      body:JSON.stringify(state),
+      keepalive:true
+    });
+  }catch(_){}
 }
 
 const _origSave=save;
@@ -1604,10 +1637,13 @@ function _onFocusPull(){
   driveLoadRemote().catch(()=>{});
 }
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible') _onFocusPull();
+  if(document.visibilityState==='hidden') driveFlushNow();
+  else _onFocusPull();
 });
 window.addEventListener('focus',_onFocusPull);
-setInterval(()=>{if(gcalToken && document.visibilityState==='visible') driveLoadRemote();},20000);
+window.addEventListener('blur',driveFlushNow);
+window.addEventListener('pagehide',driveFlushNow);
+setInterval(()=>{if(gcalToken && document.visibilityState==='visible') driveLoadRemote();},5000);
 
 function _gcalBootstrap(retry){
   gcalRestore();
