@@ -1287,6 +1287,7 @@ const GCAL_CLIENT_ID='562122314100-jros5ij3ep1v4rtd4ctoaei20l0448ia.apps.googleu
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata';
 const GCAL_TZ=Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Kolkata';
 let gcalToken=null, gcalTokenExpiry=0, gcalClient=null, gcalSyncing=false;
+let _gcalSilentMode=false, _gcalRefreshTimer=null;
 
 function gcalRestore(){
   try{
@@ -1300,6 +1301,21 @@ function gcalRestore(){
     if(t && e>Date.now()+30000){gcalToken=t;gcalTokenExpiry=e;}
   }catch(_){}
   gcalUpdateBtn();
+}
+
+function gcalScheduleRefresh(){
+  if(_gcalRefreshTimer){clearTimeout(_gcalRefreshTimer);_gcalRefreshTimer=null;}
+  const ms=gcalTokenExpiry-Date.now()-5*60*1000;
+  if(ms>0 && ms<24*3600*1000) _gcalRefreshTimer=setTimeout(()=>gcalSilentRefresh(),ms);
+}
+
+function gcalSilentRefresh(){
+  if(!localStorage.getItem('sb_gcal_consented_drive')) return false;
+  const c=gcalInitClient();
+  if(!c) return false;
+  _gcalSilentMode=true;
+  try{c.requestAccessToken({prompt:''});return true;}
+  catch(e){_gcalSilentMode=false;return false;}
 }
 
 function gcalUpdateBtn(){
@@ -1334,10 +1350,18 @@ function gcalInitClient(){
         localStorage.setItem('sb_gcal_token',gcalToken);
         localStorage.setItem('sb_gcal_expiry',String(gcalTokenExpiry));
         gcalUpdateBtn();
-        showToast('Google connected ✓ Syncing…');
-        gcalAfterAuth();
+        gcalScheduleRefresh();
+        if(_gcalSilentMode){
+          _gcalSilentMode=false;
+          driveLoadRemote().catch(()=>{});
+          gcalSyncAll();
+        } else {
+          showToast('Google connected ✓ Syncing…');
+          gcalAfterAuth();
+        }
       } else if(resp.error){
-        showToast('Auth failed: '+resp.error);
+        if(_gcalSilentMode){_gcalSilentMode=false;}
+        else showToast('Auth failed: '+resp.error);
       }
     },
   });
@@ -1572,30 +1596,47 @@ async function driveCheckScope(){
   }catch(e){console.warn('[SB] scope check failed',e);return false;}
 }
 
+function _onFocusPull(){
+  if(!gcalToken || gcalTokenExpiry<=Date.now()){
+    if(localStorage.getItem('sb_gcal_consented_drive')) gcalSilentRefresh();
+    return;
+  }
+  driveLoadRemote().catch(()=>{});
+}
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible' && gcalToken) driveLoadRemote();
+  if(document.visibilityState==='visible') _onFocusPull();
 });
+window.addEventListener('focus',_onFocusPull);
 setInterval(()=>{if(gcalToken && document.visibilityState==='visible') driveLoadRemote();},20000);
 
-window.addEventListener('load',()=>{
-  setTimeout(()=>{
-    gcalRestore();
-    if(gcalToken){
-      driveCheckScope().then(ok=>{
-        if(!ok){
-          showToast('Re-authorize for sync — click 📅');
-          gcalToken=null;gcalTokenExpiry=0;
-          localStorage.removeItem('sb_gcal_token');
-          localStorage.removeItem('sb_gcal_expiry');
-          localStorage.removeItem('sb_gcal_consented_drive');
-          gcalUpdateBtn();
-        } else {
-          driveLoadRemote();
-        }
-      });
+function _gcalBootstrap(retry){
+  gcalRestore();
+  const consented=!!localStorage.getItem('sb_gcal_consented_drive');
+  if(gcalToken){
+    gcalScheduleRefresh();
+    driveCheckScope().then(ok=>{
+      if(!ok){
+        showToast('Re-authorize for sync — click 📅');
+        gcalToken=null;gcalTokenExpiry=0;
+        localStorage.removeItem('sb_gcal_token');
+        localStorage.removeItem('sb_gcal_expiry');
+        localStorage.removeItem('sb_gcal_consented_drive');
+        gcalUpdateBtn();
+      } else {
+        driveLoadRemote();
+      }
+    });
+    return;
+  }
+  if(consented){
+    if(typeof google!=='undefined' && google.accounts){
+      gcalSilentRefresh();
+    } else if(retry<10){
+      setTimeout(()=>_gcalBootstrap(retry+1),500);
     }
-  },500);
-});
+  }
+}
+window.addEventListener('load',()=>{setTimeout(()=>_gcalBootstrap(0),500);});
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').then(reg=>{
