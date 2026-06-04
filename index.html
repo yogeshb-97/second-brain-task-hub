@@ -244,6 +244,7 @@ body{
 .hh-cell.hh-empty{visibility:hidden;}
 .hh-legend{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:10px;color:var(--muted);}
 
+.board-hint{font-size:11px;color:var(--muted);margin:0 2px 12px;display:flex;align-items:center;gap:5px;}
 .kanban-filter{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
 .kanban-board{
   display:grid;grid-template-columns:repeat(3,1fr);
@@ -804,7 +805,7 @@ function switchTab(tab,idx) {
 
 function renderTab(tab) {
   const main=document.getElementById('main');
-  if(tab==='today') main.innerHTML=renderToday();
+  if(tab==='today'){main.innerHTML=renderToday();initKanbanDrag();}
   else if(tab==='pending') main.innerHTML=renderPending();
   else if(tab==='bucket') main.innerHTML=renderBucket();
   else if(tab==='habits') main.innerHTML=renderHabits();
@@ -851,8 +852,8 @@ function renderToday() {
   const todayTasks=state.tasks.filter(t=>t.list==='today');
   const tomorrowTasks=state.tasks.filter(t=>t.list==='tomorrow');
   const done=todayTasks.filter(t=>t.status==='done');
-  const undone=todayTasks.filter(t=>t.status==='todo').sort(byPriority);
   const inprog=todayTasks.filter(t=>t.status==='inprogress');
+  const undone=todayTasks.filter(t=>t.status==='todo');
   const xpEarned=todayTasks.filter(t=>t.xpAwarded).reduce((a,t)=>a+t.xp,0);
 
   let html=`
@@ -860,55 +861,9 @@ function renderToday() {
   <div class="stat-card"><div class="stat-val">${done.length}</div><div class="stat-lbl">Done today</div></div>
   <div class="stat-card"><div class="stat-val">${undone.length+inprog.length}</div><div class="stat-lbl">Left to do</div></div>
   <div class="stat-card"><div class="stat-val">${xpEarned}</div><div class="stat-lbl">XP earned</div></div>
-</div>`;
-
-  if(inprog.length){
-    html+=`<div class="section-label">In Progress</div>`;
-    inprog.forEach(t=>{
-      html+=taskItemHTML(t,`
-        <button class="act-btn primary" onclick="setStatus(${t.id},'done',event)">
-          <span class="material-symbols-outlined" style="font-size:13px">check</span> Done
-        </button>
-        <button class="act-btn" onclick="moveTask(${t.id},'pending',event)" title="Move to Pending">
-          <span class="material-symbols-outlined" style="font-size:13px">arrow_forward</span>
-        </button>
-        <button class="del-btn" onclick="deleteTask(${t.id},event)">
-          <span class="material-symbols-outlined" style="font-size:14px">delete</span>
-        </button>`);
-    });
-  }
-
-  if(undone.length){
-    html+=`<div class="section-label">To Do</div>`;
-    undone.forEach(t=>{
-      html+=taskItemHTML(t,`
-        <button class="act-btn" onclick="setStatus(${t.id},'inprogress',event)">
-          <span class="material-symbols-outlined" style="font-size:13px">play_arrow</span> Start
-        </button>
-        <button class="act-btn primary" onclick="setStatus(${t.id},'done',event)">
-          <span class="material-symbols-outlined" style="font-size:13px">check</span>
-        </button>
-        <button class="act-btn" onclick="moveTask(${t.id},'pending',event)" title="Move to Pending">
-          <span class="material-symbols-outlined" style="font-size:13px">arrow_forward</span>
-        </button>
-        <button class="del-btn" onclick="deleteTask(${t.id},event)">
-          <span class="material-symbols-outlined" style="font-size:14px">delete</span>
-        </button>`);
-    });
-  }
-
-  if(done.length){
-    html+=`<div class="section-label">Completed</div>`;
-    done.forEach(t=>{
-      html+=taskItemHTML(t,`
-        <button class="act-btn" onclick="setStatus(${t.id},'todo',event)">
-          <span class="material-symbols-outlined" style="font-size:13px">replay</span> Undo
-        </button>
-        <button class="del-btn" onclick="deleteTask(${t.id},event)">
-          <span class="material-symbols-outlined" style="font-size:14px">delete</span>
-        </button>`);
-    });
-  }
+</div>
+<div class="board-hint">Drag a card between columns, or use the buttons on each card.</div>
+${kanbanBoardHTML(todayTasks)}`;
 
   if(tomorrowTasks.length){
     html+=`<div class="section-label" style="margin-top:24px">Tomorrow</div>`;
@@ -921,10 +876,6 @@ function renderToday() {
           <span class="material-symbols-outlined" style="font-size:14px">delete</span>
         </button>`);
     });
-  }
-
-  if(!todayTasks.length&&!tomorrowTasks.length){
-    html+=`<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:14px">No tasks for today. Add one!</div>`;
   }
   return html;
 }
@@ -1175,22 +1126,10 @@ function renderHabits() {
 
 function setKanbanFilter(f){kanbanFilter=f;reRender();}
 
-function renderKanban() {
-  const filters=[{key:'all',label:'All'},{key:'today',label:'Today'},{key:'pending',label:'Pending'},{key:'bucket',label:'Bucket'}];
-  let tasks=state.tasks;
-  if(kanbanFilter!=='all') tasks=tasks.filter(t=>t.list===kanbanFilter);
-  const todo=tasks.filter(t=>t.status==='todo').sort(byPriority);
-  const inprog=tasks.filter(t=>t.status==='inprogress').sort(byPriority);
-  const done=tasks.filter(t=>t.status==='done');
-
-  const filterHTML=filters.map(f=>
-    `<span class="pill${kanbanFilter===f.key?' active-pill':''}" onclick="setKanbanFilter('${f.key}')">${f.label}</span>`
-  ).join('');
-
-  function kCard(t){
-    const ls=listBadgeStyle(t.list);
-    const ll={today:'Today',tomorrow:'Tomorrow',pending:'Pending',bucket:'Bucket'};
-    return `
+function kanbanCardHTML(t){
+  const ls=listBadgeStyle(t.list);
+  const ll={today:'Today',tomorrow:'Tomorrow',pending:'Pending',bucket:'Bucket'};
+  return `
 <div class="kanban-task" data-id="${t.id}" data-status="${t.status}">
   <div class="kanban-task-title">${escHtml(t.title)}</div>
   ${t.desc?`<div class="task-desc" style="margin:-4px 0 8px">${escHtml(t.desc)}</div>`:''}
@@ -1210,34 +1149,38 @@ function renderKanban() {
       <button class="act-btn" onclick="setStatus(${t.id},'todo',event)"><span class="material-symbols-outlined" style="font-size:12px">replay</span> Reopen</button>`}
   </div>
 </div>`;
-  }
+}
 
-  const empty=`<div style="font-size:12px;color:var(--muted);text-align:center;padding:20px 0">No tasks</div>`;
+// Shared 3-column board (To Do | In Progress | Completed) used by Today + Kanban tabs.
+function kanbanBoardHTML(tasks){
+  const todo  =tasks.filter(t=>t.status==='todo').sort(byPriority);
+  const inprog=tasks.filter(t=>t.status==='inprogress').sort(byPriority);
+  const done  =tasks.filter(t=>t.status==='done');
+  const empty=`<div class="kanban-empty" style="font-size:12px;color:var(--muted);text-align:center;padding:20px 0">Drop tasks here</div>`;
+  const col=(key,label,countBg,countColor,list)=>`
+  <div class="kanban-col" data-droptarget="${key}">
+    <div class="kanban-col-header">
+      <span class="kanban-col-title">${label}</span>
+      <span class="kanban-count" style="background:${countBg};color:${countColor}">${list.length}</span>
+    </div>
+    ${list.length?list.map(kanbanCardHTML).join(''):empty}
+  </div>`;
   return `
-<div class="kanban-filter">${filterHTML}</div>
 <div class="kanban-board" id="kanban-board">
-  <div class="kanban-col" data-droptarget="todo">
-    <div class="kanban-col-header">
-      <span class="kanban-col-title">To Do</span>
-      <span class="kanban-count" style="background:#e2dfff;color:#3525cd">${todo.length}</span>
-    </div>
-    ${todo.length?todo.map(kCard).join(''):empty}
-  </div>
-  <div class="kanban-col" data-droptarget="inprogress">
-    <div class="kanban-col-header">
-      <span class="kanban-col-title">In Progress</span>
-      <span class="kanban-count" style="background:#fff8ee;color:#684000">${inprog.length}</span>
-    </div>
-    ${inprog.length?inprog.map(kCard).join(''):empty}
-  </div>
-  <div class="kanban-col" data-droptarget="done">
-    <div class="kanban-col-header">
-      <span class="kanban-col-title">Done</span>
-      <span class="kanban-count" style="background:#e8fdf4;color:#006c49">${done.length}</span>
-    </div>
-    ${done.length?done.map(kCard).join(''):empty}
-  </div>
+  ${col('todo','To Do','#e2dfff','#3525cd',todo)}
+  ${col('inprogress','In Progress','#fff8ee','#684000',inprog)}
+  ${col('done','Completed','#e8fdf4','#006c49',done)}
 </div>`;
+}
+
+function renderKanban() {
+  const filters=[{key:'all',label:'All'},{key:'today',label:'Today'},{key:'pending',label:'Pending'},{key:'bucket',label:'Bucket'}];
+  let tasks=state.tasks;
+  if(kanbanFilter!=='all') tasks=tasks.filter(t=>t.list===kanbanFilter);
+  const filterHTML=filters.map(f=>
+    `<span class="pill${kanbanFilter===f.key?' active-pill':''}" onclick="setKanbanFilter('${f.key}')">${f.label}</span>`
+  ).join('');
+  return `<div class="kanban-filter">${filterHTML}</div>${kanbanBoardHTML(tasks)}`;
 }
 
 function initKanbanDrag() {
