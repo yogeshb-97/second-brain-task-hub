@@ -32,17 +32,29 @@
   --faint:    #777587;
   --input-bg: #eff4ff;
   --nav-bg:   rgba(255,255,255,0.95);
+  /* interactive tokens */
+  --primary:        #3525cd;  /* filled buttons / active states */
+  --primary-hover:  #2a1db0;
+  --on-primary:     #ffffff;  /* text/icon on a filled button */
+  --accent-soft-bg: #e2dfff;  /* soft active chip (e.g. bottom-nav) */
+  --accent-soft-text:#3525cd;
 }
 [data-theme="dark"] {
-  --bg:       #1c2030;
-  --card:     #272c42;
-  --card-alt: #313752;
-  --border:   #3e4561;
-  --text:     #f1f2f8;
-  --muted:    #c5c9dc;
-  --faint:    #9098b3;
-  --input-bg: #313752;
-  --nav-bg:   rgba(39,44,66,0.95);
+  --bg:       #15171c;
+  --card:     #1e2025;
+  --card-alt: #262931;
+  --border:   #33373f;
+  --text:     #f5f6f8;
+  --muted:    #b6bcc6;
+  --faint:    #868d99;
+  --input-bg: #262931;
+  --nav-bg:   rgba(30,32,37,0.96);
+  /* dark = white buttons with black text, white text everywhere else */
+  --primary:        #f5f6f8;
+  --primary-hover:  #e2e3ea;
+  --on-primary:     #16181d;
+  --accent-soft-bg: #2c3038;
+  --accent-soft-text:#f5f6f8;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{
@@ -66,7 +78,7 @@ body{
 }
 .header-inner{max-width:900px;margin:0 auto;padding:12px 16px 0;}
 .header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-.logo{display:flex;align-items:center;gap:6px;font-size:18px;font-weight:700;color:#3525cd;letter-spacing:-0.3px;}
+.logo{display:flex;align-items:center;gap:6px;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.3px;}
 .header-actions{display:flex;align-items:center;gap:8px;}
 .icon-btn{
   width:36px;height:36px;border-radius:10px;
@@ -78,11 +90,11 @@ body{
 .add-btn{
   display:flex;align-items:center;gap:4px;
   padding:0 14px;height:36px;border-radius:10px;
-  border:none;background:#3525cd;color:#fff;
+  border:none;background:var(--primary);color:var(--on-primary);
   font-family:inherit;font-size:13px;font-weight:600;
   cursor:pointer;transition:background 0.15s;
 }
-.add-btn:hover{background:#2a1db0;}
+.add-btn:hover{background:var(--primary-hover);}
 
 .tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding-bottom:0;}
 .tabs::-webkit-scrollbar{display:none;}
@@ -96,7 +108,7 @@ body{
   transition:color 0.15s,background 0.15s;
   margin-bottom:0;
 }
-.tab.active{background:#3525cd;color:#fff;}
+.tab.active{background:var(--primary);color:var(--on-primary);}
 .tab:hover:not(.active){color:var(--text);}
 
 #main{max-width:900px;margin:0 auto;padding:20px 16px 90px;}
@@ -107,7 +119,7 @@ body{
   background:var(--card);border:1px solid var(--border);
   border-radius:12px;padding:12px 14px;text-align:center;
 }
-.stat-val{font-size:22px;font-weight:700;color:#3525cd;}
+.stat-val{font-size:22px;font-weight:700;color:var(--text);}
 .stat-lbl{font-size:11px;color:var(--muted);margin-top:2px;}
 
 .task-item{
@@ -124,8 +136,8 @@ body{
   cursor:pointer;display:flex;align-items:center;justify-content:center;
   transition:background 0.15s,border-color 0.15s;
 }
-.task-check.checked{background:#3525cd;border-color:#3525cd;}
-.task-check.inprog{background:#684000;border-color:#684000;}
+.task-check.checked{background:var(--primary);border-color:var(--primary);color:var(--on-primary);}
+.task-check.inprog{background:#b07a1e;border-color:#b07a1e;color:#fff;}
 .task-meta{flex:1;min-width:0;}
 .task-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:6px;line-height:1.4;}
 .task-title.done-txt{text-decoration:line-through;color:var(--muted);}
@@ -135,12 +147,16 @@ body{
   font-size:11px;font-weight:600;border-radius:6px;
   padding:2px 8px;display:inline-flex;align-items:center;gap:4px;
 }
-.dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;background:currentColor;}
+.badge.b-high{background:#fdeaea;color:#c0392b;}
+.badge.b-low{background:#e7f6ef;color:#1a7a4e;}
+[data-theme="dark"] .badge.b-high{background:#3a2122;color:#ff9b9b;}
+[data-theme="dark"] .badge.b-low{background:#163029;color:#62d6a0;}
 .tag-badge{
   font-size:11px;font-weight:500;color:var(--muted);
   background:var(--card-alt);border-radius:6px;padding:2px 8px;
 }
-.xp-badge{font-size:11px;font-weight:600;color:#3525cd;}
+.xp-badge{font-size:11px;font-weight:600;color:var(--muted);}
 .task-actions{
   display:flex;gap:5px;flex-shrink:0;
   align-items:flex-start;flex-wrap:wrap;
@@ -158,8 +174,8 @@ body{
   white-space:nowrap;transition:background 0.12s;
 }
 .act-btn:hover{background:var(--border);}
-.act-btn.primary{background:#3525cd;color:#fff;border-color:#3525cd;}
-.act-btn.primary:hover{background:#2a1db0;}
+.act-btn.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary);}
+.act-btn.primary:hover{background:var(--primary-hover);}
 .del-btn{
   width:28px;height:28px;border-radius:8px;
   border:1px solid var(--border);background:var(--card-alt);
@@ -188,13 +204,13 @@ body{
   background:var(--input-bg);color:var(--text);
   font-family:inherit;font-size:16px;outline:none;
 }
-.search-input:focus{border-color:#3525cd;}
+.search-input:focus{border-color:var(--primary);}
 .filter-select{
   padding:8px 10px;border-radius:10px;
   border:1px solid var(--border);background:var(--input-bg);
   color:var(--text);font-family:inherit;font-size:16px;outline:none;cursor:pointer;
 }
-.filter-select:focus{border-color:#3525cd;}
+.filter-select:focus{border-color:var(--primary);}
 .pills-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
 .pill{
   font-size:12px;font-weight:600;border-radius:20px;
@@ -202,7 +218,7 @@ body{
   background:var(--card-alt);color:var(--muted);
   cursor:pointer;transition:background 0.12s;
 }
-.pill.active-pill{background:#3525cd;color:#fff;border-color:#3525cd;}
+.pill.active-pill{background:var(--primary);color:var(--on-primary);border-color:var(--primary);}
 
 .habit-card{
   background:var(--card);border:1px solid var(--border);
@@ -221,7 +237,7 @@ body{
 .habit-streak{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);}
 .streak-dots{display:flex;gap:3px;}
 .s-dot{width:8px;height:8px;border-radius:50%;background:var(--border);}
-.s-dot.hit{background:#3525cd;}
+.s-dot.hit{background:var(--primary);}
 .habit-pct{font-size:13px;font-weight:700;text-align:right;}
 
 .heatmap-card{
@@ -235,10 +251,10 @@ body{
 .h-cell.l2{background:#8b7ef0;}
 .h-cell.l3{background:#5b48e8;}
 .h-cell.l4{background:#3525cd;}
-[data-theme="dark"] .h-cell.l1{background:#2d2560;}
-[data-theme="dark"] .h-cell.l2{background:#3d31a0;}
-[data-theme="dark"] .h-cell.l3{background:#4e3dc0;}
-[data-theme="dark"] .h-cell.l4{background:#6351e8;}
+[data-theme="dark"] .h-cell.l1{background:#3a3e47;}
+[data-theme="dark"] .h-cell.l2{background:#5b616d;}
+[data-theme="dark"] .h-cell.l3{background:#8990a0;}
+[data-theme="dark"] .h-cell.l4{background:#f5f6f8;}
 .hh-grid{display:grid;grid-template-columns:repeat(12,9px);grid-template-rows:repeat(7,9px);grid-auto-flow:column;gap:2px;margin-top:10px;}
 .hh-cell{width:9px;height:9px;border-radius:2px;background:var(--border);}
 .hh-cell.hh-empty{visibility:hidden;}
@@ -277,7 +293,8 @@ body{
 .kanban-task-title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:7px;}
 .kanban-badges{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;}
 .kanban-actions{display:flex;gap:5px;flex-wrap:wrap;}
-.kanban-col.drag-over{outline:2px dashed #3525cd;outline-offset:-2px;}
+.kanban-count{background:var(--card-alt);color:var(--text);}
+.kanban-col.drag-over{outline:2px dashed var(--primary);outline-offset:-2px;}
 
 .modal-overlay{
   position:fixed;inset:0;background:rgba(0,0,0,0.5);
@@ -306,7 +323,7 @@ body{
   color:var(--text);font-size:16px;font-family:inherit;
   outline:none;transition:border-color 0.15s;
 }
-.form-input:focus,.form-select:focus{border-color:#3525cd;}
+.form-input:focus,.form-select:focus{border-color:var(--primary);}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .modal-footer{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
 .btn-cancel{
@@ -316,10 +333,10 @@ body{
 }
 .btn-save{
   padding:8px 18px;border-radius:10px;border:none;
-  background:#3525cd;color:#fff;
+  background:var(--primary);color:var(--on-primary);
   font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;
 }
-.btn-save:hover{background:#2a1db0;}
+.btn-save:hover{background:var(--primary-hover);}
 
 #bottom-nav{
   position:fixed;bottom:0;left:0;right:0;
@@ -338,7 +355,7 @@ body{
   cursor:pointer;padding:6px 4px;border-radius:10px;
   color:var(--muted);transition:color 0.15s,background 0.15s;
 }
-.nav-item.active{background:#e2dfff;color:#3525cd;}
+.nav-item.active{background:var(--accent-soft-bg);color:var(--accent-soft-text);}
 .nav-item span.material-symbols-outlined{font-size:20px;}
 .bnav-label{font-size:9px;font-weight:600;line-height:1;}
 @media(max-width:360px){.bnav-label{display:none;}}
@@ -346,7 +363,7 @@ body{
 #toast{
   position:fixed;bottom:80px;left:50%;
   transform:translateX(-50%) translateY(20px);
-  background:#3525cd;color:#fff;
+  background:var(--primary);color:var(--on-primary);
   font-size:13px;font-weight:600;
   padding:8px 18px;border-radius:20px;
   opacity:0;pointer-events:none;
@@ -642,8 +659,8 @@ function diffBadgeHTML(diff) {
 }
 
 const PRIO={
-  high:{label:'⭐ Most important',bg:'#fff0f0',color:'#ba1a1a'},
-  low: {label:'Less important',   bg:'#e8fdf4',color:'#006c49'}
+  high:{label:'⭐ Most important',cls:'b-high'},
+  low: {label:'Less important',   cls:'b-low'}
 };
 function taskPrio(t){
   if(t.priority==='high') return 'high';
@@ -652,7 +669,7 @@ function taskPrio(t){
 }
 function priorityBadgeHTML(t){
   const p=PRIO[taskPrio(t)];
-  return `<span class="badge" style="background:${p.bg};color:${p.color}"><span class="dot" style="background:${p.color}"></span>${p.label}</span>`;
+  return `<span class="badge ${p.cls}"><span class="dot"></span>${p.label}</span>`;
 }
 function byPriority(a,b){return (taskPrio(a)==='high'?0:1)-(taskPrio(b)==='high'?0:1);}
 
@@ -817,7 +834,7 @@ function taskItemHTML(task,actionsHTML) {
   const isInProg=task.status==='inprogress';
   const checkClass=isDone?'checked':(isInProg?'inprog':'');
   const checkIcon=isDone
-    ?`<span class="material-symbols-outlined filled" style="font-size:13px;color:#fff">check</span>`
+    ?`<span class="material-symbols-outlined filled" style="font-size:13px;color:var(--on-primary)">check</span>`
     :(isInProg?`<span class="material-symbols-outlined" style="font-size:11px;color:#fff">play_arrow</span>`:'');
   const titleClass=isDone?'task-title done-txt':'task-title';
   const repLbl={daily:'Daily',weekday:'Weekdays',weekly:'Weekly',monthly:'Monthly',annually:'Yearly'}[task.repeat]||'';
@@ -839,7 +856,7 @@ function taskItemHTML(task,actionsHTML) {
       ${task.desc?`<div class="task-desc">${escHtml(task.desc)}</div>`:''}
       <div class="task-badges">
         ${priorityBadgeHTML(task)}
-        ${task.tag?`<span class="tag-badge">${escHtml(task.tag)}</span>`:''}${task.folder?`<span class="tag-badge" style="background:#e2dfff;color:#3525cd">📁 ${escHtml(task.folder)}</span>`:''}
+        ${task.tag?`<span class="tag-badge">${escHtml(task.tag)}</span>`:''}${task.folder?`<span class="tag-badge">📁 ${escHtml(task.folder)}</span>`:''}
         <span class="xp-badge">⚡${task.xp} XP</span>
       </div>
     </div>
@@ -953,7 +970,7 @@ function renderBucket() {
 </div>`;
   let html=`
 <div class="info-banner">
-  <span class="material-symbols-outlined" style="font-size:18px;color:#3525cd">inventory_2</span>
+  <span class="material-symbols-outlined" style="font-size:18px;color:var(--muted)">inventory_2</span>
   <span>Bucket List — Someday goals and ideas. Organise by folder, move to Today or Pending when ready.</span>
 </div>${chipsHTML}`;
   if(!tasks.length){
@@ -1127,7 +1144,6 @@ function renderHabits() {
 function setKanbanFilter(f){kanbanFilter=f;reRender();}
 
 function kanbanCardHTML(t){
-  const ls=listBadgeStyle(t.list);
   const ll={today:'Today',tomorrow:'Tomorrow',pending:'Pending',bucket:'Bucket'};
   return `
 <div class="kanban-task" data-id="${t.id}" data-status="${t.status}">
@@ -1135,7 +1151,7 @@ function kanbanCardHTML(t){
   ${t.desc?`<div class="task-desc" style="margin:-4px 0 8px">${escHtml(t.desc)}</div>`:''}
   <div class="kanban-badges">
     ${priorityBadgeHTML(t)}
-    <span class="badge" style="background:${ls.bg};color:${ls.color}">${ll[t.list]||t.list}</span>
+    <span class="tag-badge">${ll[t.list]||t.list}</span>
     ${t.tag?`<span class="tag-badge">${escHtml(t.tag)}</span>`:''}
   </div>
   <div class="kanban-actions">
@@ -1157,19 +1173,19 @@ function kanbanBoardHTML(tasks){
   const inprog=tasks.filter(t=>t.status==='inprogress').sort(byPriority);
   const done  =tasks.filter(t=>t.status==='done');
   const empty=`<div class="kanban-empty" style="font-size:12px;color:var(--muted);text-align:center;padding:20px 0">Drop tasks here</div>`;
-  const col=(key,label,countBg,countColor,list)=>`
+  const col=(key,label,list)=>`
   <div class="kanban-col" data-droptarget="${key}">
     <div class="kanban-col-header">
       <span class="kanban-col-title">${label}</span>
-      <span class="kanban-count" style="background:${countBg};color:${countColor}">${list.length}</span>
+      <span class="kanban-count">${list.length}</span>
     </div>
     ${list.length?list.map(kanbanCardHTML).join(''):empty}
   </div>`;
   return `
 <div class="kanban-board" id="kanban-board">
-  ${col('todo','To Do','#e2dfff','#3525cd',todo)}
-  ${col('inprogress','In Progress','#fff8ee','#684000',inprog)}
-  ${col('done','Completed','#e8fdf4','#006c49',done)}
+  ${col('todo','To Do',todo)}
+  ${col('inprogress','In Progress',inprog)}
+  ${col('done','Completed',done)}
 </div>`;
 }
 

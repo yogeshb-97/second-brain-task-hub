@@ -1,4 +1,4 @@
-const CACHE = 'sb-v8';
+const CACHE = 'sb-v9';
 const ASSETS = [
   '/',
   '/index.html',
