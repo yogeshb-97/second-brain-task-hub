@@ -537,7 +537,9 @@ body{
 <div id="toast"></div>
 
 <script>
-const TODAY_ISO = new Date().toISOString().slice(0,10);
+// Day boundary is midnight IST (Asia/Kolkata), independent of device timezone.
+const istToday = () => new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});
+const TODAY_ISO = istToday();
 const STORE_KEY = 'sb_v4';
 
 const SEED_TASKS = [
@@ -622,13 +624,43 @@ function load() {
     if(!h.log || typeof h.log!=='object') h.log={};
   });
 
+  let mutated=false;
   if (state.lastOpenDate && state.lastOpenDate !== TODAY_ISO) {
-    let n=0;
-    state.tasks.forEach(t=>{if(t.list==='tomorrow'){t.list='today';n++;}});
-    promotedCount=n;
+    promotedCount = dailyReset().promoted;
+    mutated=true;
   }
   state.lastOpenDate = TODAY_ISO;
+
+  // One-time cleanup: clear the existing completed tasks (user request, 2026-06-04).
+  if(!state.purgedDoneV1){
+    const before=state.tasks.length;
+    state.tasks = state.tasks.filter(t=>!(t.list==='today' && t.status==='done'));
+    state.purgedDoneV1 = true;
+    if(state.tasks.length!==before) mutated=true;
+  }
+  // Bump lastSaved only when we actually changed data, so the change wins on the next
+  // Drive sync (and a fresh device's initial pull isn't blocked). See sync invariants.
+  if(mutated) state.lastSaved = Date.now();
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
+}
+
+// Resets the Today board at the IST midnight boundary so it starts empty each day:
+//  - completed (done) Today tasks are cleared out
+//  - unfinished non-recurring Today tasks roll over to Pending (never lost)
+//  - recurring tasks stay in Today, reset to To Do
+//  - Tomorrow's tasks promote into Today
+function dailyReset(){
+  let moved=0;
+  state.tasks = state.tasks.filter(t=>{
+    if(t.list!=='today') return true;
+    if(t.repeat && t.repeat!=='none'){ t.status='todo'; t.xpAwarded=false; return true; }
+    if(t.status==='done') return false;
+    t.list='pending'; t.status='todo'; moved++;
+    return true;
+  });
+  let promoted=0;
+  state.tasks.forEach(t=>{ if(t.list==='tomorrow'){ t.list='today'; promoted++; } });
+  return {moved,promoted};
 }
 
 function save() {
@@ -1265,6 +1297,22 @@ load();
 initThemeIcon();
 renderTab('today');
 if(promotedCount>0) showToast(`${promotedCount} task${promotedCount>1?'s':''} moved to today`);
+
+// Fire the daily reset the moment IST crosses midnight, even if the app stays open.
+let _lastSeenDay = TODAY_ISO;
+function checkDayRollover(){
+  const d = istToday();
+  if(d === _lastSeenDay) return;
+  _lastSeenDay = d;
+  state.lastOpenDate = d;
+  dailyReset();
+  save();
+  reRender();
+  showToast('New day — board reset for today');
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkDayRollover();});
+window.addEventListener('focus',checkDayRollover);
+setInterval(checkDayRollover,60000);
 
 const GCAL_CLIENT_ID='562122314100-jros5ij3ep1v4rtd4ctoaei20l0448ia.apps.googleusercontent.com';
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata';
