@@ -449,9 +449,16 @@ body{
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Tag</label>
-        <input class="form-input" id="m-tag" type="text" placeholder="e.g. Work"/>
+        <label class="form-label">Importance</label>
+        <select class="form-select" id="m-priority">
+          <option value="high">⭐ Most important</option>
+          <option value="low" selected>Less important</option>
+        </select>
       </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tag</label>
+      <input class="form-input" id="m-tag" type="text" placeholder="e.g. Work"/>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -549,7 +556,7 @@ let state = {
 };
 let pendingSearch='';
 let pendingFilter='All';
-let kanbanFilter='all';
+let kanbanFilter='today';
 let promotedCount=0;
 
 function load() {
@@ -632,6 +639,21 @@ function diffBadgeHTML(diff) {
   const s=diffStyle(diff);
   return `<span class="badge" style="background:${s.bg};color:${s.color}"><span class="dot" style="background:${s.color}"></span>${diff}</span>`;
 }
+
+const PRIO={
+  high:{label:'⭐ Most important',bg:'#fff0f0',color:'#ba1a1a'},
+  low: {label:'Less important',   bg:'#e8fdf4',color:'#006c49'}
+};
+function taskPrio(t){
+  if(t.priority==='high') return 'high';
+  if(t.priority==='low')  return 'low';
+  return t.diff==='Hard'?'high':'low'; // legacy tasks
+}
+function priorityBadgeHTML(t){
+  const p=PRIO[taskPrio(t)];
+  return `<span class="badge" style="background:${p.bg};color:${p.color}"><span class="dot" style="background:${p.color}"></span>${p.label}</span>`;
+}
+function byPriority(a,b){return (taskPrio(a)==='high'?0:1)-(taskPrio(b)==='high'?0:1);}
 
 function showToast(msg) {
   const t=document.getElementById('toast');
@@ -722,6 +744,7 @@ function openModal() {
   document.getElementById('m-title').value='';
   document.getElementById('m-desc').value='';
   document.getElementById('m-tag').value='';
+  document.getElementById('m-priority').value='low';
   document.getElementById('m-due').value='';
   document.getElementById('m-due').style.display='none';
   document.getElementById('m-due-quick').value='';
@@ -752,8 +775,9 @@ function saveTask() {
   const duration=parseInt(document.getElementById('m-duration').value)||0;
   const repeat=document.getElementById('m-repeat').value;
   const folder=document.getElementById('m-folder').value||'';
+  const priority=document.getElementById('m-priority').value==='high'?'high':'low';
   const id=state.nextId++;
-  state.tasks.push({id,title,desc,diff:'Medium',xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,dueDuration:duration,repeat,folder,xpAwarded:false});
+  state.tasks.push({id,title,desc,diff:'Medium',priority,xp:150,tag,list,status:'todo',dueDate:due,dueTime:time,dueDuration:duration,repeat,folder,xpAwarded:false});
   save();closeModal();reRender();showToast('Task added!');
 }
 
@@ -813,7 +837,7 @@ function taskItemHTML(task,actionsHTML) {
       <div class="${titleClass}">${escHtml(task.title)}${dueHTML}</div>
       ${task.desc?`<div class="task-desc">${escHtml(task.desc)}</div>`:''}
       <div class="task-badges">
-        ${diffBadgeHTML(task.diff)}
+        ${priorityBadgeHTML(task)}
         ${task.tag?`<span class="tag-badge">${escHtml(task.tag)}</span>`:''}${task.folder?`<span class="tag-badge" style="background:#e2dfff;color:#3525cd">📁 ${escHtml(task.folder)}</span>`:''}
         <span class="xp-badge">⚡${task.xp} XP</span>
       </div>
@@ -827,7 +851,7 @@ function renderToday() {
   const todayTasks=state.tasks.filter(t=>t.list==='today');
   const tomorrowTasks=state.tasks.filter(t=>t.list==='tomorrow');
   const done=todayTasks.filter(t=>t.status==='done');
-  const undone=todayTasks.filter(t=>t.status==='todo');
+  const undone=todayTasks.filter(t=>t.status==='todo').sort(byPriority);
   const inprog=todayTasks.filter(t=>t.status==='inprogress');
   const xpEarned=todayTasks.filter(t=>t.xpAwarded).reduce((a,t)=>a+t.xp,0);
 
@@ -908,24 +932,25 @@ function renderToday() {
 function setPendingFilter(f){pendingFilter=f;reRender();}
 
 function renderPending() {
-  const diffs=['All','Easy','Medium','Hard'];
+  const filters=[{key:'All',label:'All'},{key:'high',label:'Most important'},{key:'low',label:'Less important'}];
   const allPending=state.tasks.filter(t=>t.list==='pending');
   const counts={};
-  diffs.forEach(d=>{counts[d]=d==='All'?allPending.length:allPending.filter(t=>t.diff===d).length;});
+  filters.forEach(f=>{counts[f.key]=f.key==='All'?allPending.length:allPending.filter(t=>taskPrio(t)===f.key).length;});
 
   let tasks=allPending;
-  if(pendingFilter!=='All') tasks=tasks.filter(t=>t.diff===pendingFilter);
+  if(pendingFilter!=='All') tasks=tasks.filter(t=>taskPrio(t)===pendingFilter);
   if(pendingSearch) tasks=tasks.filter(t=>t.title.toLowerCase().includes(pendingSearch.toLowerCase()));
+  tasks=tasks.slice().sort(byPriority);
 
-  const pillsHTML=diffs.map(d=>
-    `<span class="pill${pendingFilter===d?' active-pill':''}" onclick="setPendingFilter('${d}')">${d} <strong>${counts[d]}</strong></span>`
+  const pillsHTML=filters.map(f=>
+    `<span class="pill${pendingFilter===f.key?' active-pill':''}" onclick="setPendingFilter('${f.key}')">${f.label} <strong>${counts[f.key]}</strong></span>`
   ).join('');
 
   let html=`
 <div class="search-row">
   <input class="search-input" type="text" placeholder="Search tasks..." value="${escHtml(pendingSearch)}" oninput="pendingSearch=this.value;reRender()"/>
   <select class="filter-select" onchange="setPendingFilter(this.value)">
-    ${diffs.map(d=>`<option value="${d}"${pendingFilter===d?' selected':''}>${d}</option>`).join('')}
+    ${filters.map(f=>`<option value="${f.key}"${pendingFilter===f.key?' selected':''}>${f.label}</option>`).join('')}
   </select>
 </div>
 <div class="pills-row">${pillsHTML}</div>`;
@@ -1154,8 +1179,8 @@ function renderKanban() {
   const filters=[{key:'all',label:'All'},{key:'today',label:'Today'},{key:'pending',label:'Pending'},{key:'bucket',label:'Bucket'}];
   let tasks=state.tasks;
   if(kanbanFilter!=='all') tasks=tasks.filter(t=>t.list===kanbanFilter);
-  const todo=tasks.filter(t=>t.status==='todo');
-  const inprog=tasks.filter(t=>t.status==='inprogress');
+  const todo=tasks.filter(t=>t.status==='todo').sort(byPriority);
+  const inprog=tasks.filter(t=>t.status==='inprogress').sort(byPriority);
   const done=tasks.filter(t=>t.status==='done');
 
   const filterHTML=filters.map(f=>
@@ -1163,7 +1188,6 @@ function renderKanban() {
   ).join('');
 
   function kCard(t){
-    const ds=diffStyle(t.diff);
     const ls=listBadgeStyle(t.list);
     const ll={today:'Today',tomorrow:'Tomorrow',pending:'Pending',bucket:'Bucket'};
     return `
@@ -1171,7 +1195,7 @@ function renderKanban() {
   <div class="kanban-task-title">${escHtml(t.title)}</div>
   ${t.desc?`<div class="task-desc" style="margin:-4px 0 8px">${escHtml(t.desc)}</div>`:''}
   <div class="kanban-badges">
-    <span class="badge" style="background:${ds.bg};color:${ds.color}"><span class="dot" style="background:${ds.color}"></span>${t.diff}</span>
+    ${priorityBadgeHTML(t)}
     <span class="badge" style="background:${ls.bg};color:${ls.color}">${ll[t.list]||t.list}</span>
     ${t.tag?`<span class="tag-badge">${escHtml(t.tag)}</span>`:''}
   </div>
@@ -1316,6 +1340,23 @@ function gcalSilentRefresh(){
   _gcalSilentMode=true;
   try{c.requestAccessToken({prompt:''});return true;}
   catch(e){_gcalSilentMode=false;return false;}
+}
+
+// Keep the OAuth token alive without a manual Calendar click.
+// Returns true if a valid token is in hand; otherwise attempts a throttled
+// silent refresh (max once / 25s) so reopening the PWA on phone or desktop
+// re-syncs on its own instead of forcing a re-auth tap.
+let _lastSilentAttempt=0;
+function gcalEnsureFresh(){
+  const now=Date.now();
+  const valid=gcalToken && gcalTokenExpiry>now;
+  const nearExpiry=valid && gcalTokenExpiry < now+5*60*1000;
+  if(valid && !nearExpiry) return true;
+  if(!localStorage.getItem('sb_gcal_consented_drive')) return valid;
+  if(now-_lastSilentAttempt < 25000) return valid;
+  _lastSilentAttempt=now;
+  if(typeof google!=='undefined' && google.accounts) gcalSilentRefresh();
+  return valid;
 }
 
 function gcalUpdateBtn(){
@@ -1630,10 +1671,7 @@ async function driveCheckScope(){
 }
 
 function _onFocusPull(){
-  if(!gcalToken || gcalTokenExpiry<=Date.now()){
-    if(localStorage.getItem('sb_gcal_consented_drive')) gcalSilentRefresh();
-    return;
-  }
+  if(!gcalEnsureFresh()) return;   // expired/near-expiry → silent refresh kicks off, its callback pulls
   driveLoadRemote().catch(()=>{});
 }
 document.addEventListener('visibilitychange',()=>{
@@ -1643,7 +1681,10 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('focus',_onFocusPull);
 window.addEventListener('blur',driveFlushNow);
 window.addEventListener('pagehide',driveFlushNow);
-setInterval(()=>{if(gcalToken && document.visibilityState==='visible') driveLoadRemote();},5000);
+setInterval(()=>{
+  if(document.visibilityState!=='visible') return;
+  if(gcalEnsureFresh()) driveLoadRemote();   // refreshes token proactively before it dies
+},5000);
 
 function _gcalBootstrap(retry){
   gcalRestore();
