@@ -1,8 +1,9 @@
-const CACHE = 'sb-v10';
+const CACHE = 'sb-v11';
 const ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/favicon.svg',
   '/icon-192.png',
   '/icon-512.png',
 ];
